@@ -108,9 +108,7 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
   };
 
   // For dropdown options
-  const [countryList, setCountryList] = useState(() =>
-    Country.getAllCountries()
-  );
+  const [countryList] = useState(() => Country.getAllCountries());
   const [stateList, setStateList] = useState(() => [] as any[]);
   const [cityList, setCityList] = useState(() => [] as any[]);
 
