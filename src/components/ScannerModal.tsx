@@ -16,6 +16,7 @@ const ScannerModal = ({ onClose, onScanSuccess }: ScannerModalProps) => {
 
   const handleScanError = (error: string) => {
     // Silent error handling to avoid console spam
+    console.warn("Scan error:", error);
   };
 
   return (

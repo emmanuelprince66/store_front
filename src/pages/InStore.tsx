@@ -19,6 +19,7 @@ const InStore = () => {
 
   const handleScanSuccess = (decodedText: string, decodedResult: any) => {
     console.log("Scan success:", decodedText);
+    console.log("Decoded result:", decodedResult);
 
     // Parse the scanned ID and find the product
     const productId = parseInt(decodedText);
