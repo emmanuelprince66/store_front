@@ -16,7 +16,7 @@ const CartModal = ({ onClose, onCheckout }: CartModalProps) => {
 
   if (cart.length === 0) {
     return (
-      <div className="p-8 text-center">
+      <div className="p-8 text-center flex w-full flex-col items-center">
         <div className="mb-4">
           <svg
             className="w-16 h-16 text-gray-300 mx-auto"
@@ -38,7 +38,7 @@ const CartModal = ({ onClose, onCheckout }: CartModalProps) => {
         <p className="text-gray-600 mb-6">Add some products to get started</p>
         <button
           onClick={onClose}
-          className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors cursor-pointer"
+          className="bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 transition-colors cursor-pointer"
         >
           Continue Shopping
         </button>

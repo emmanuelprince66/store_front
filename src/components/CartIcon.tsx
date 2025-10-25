@@ -9,25 +9,28 @@ const CartIcon = ({ onCheckout }: any) => {
 
   return (
     <>
-      <div
-        className="bg-blue-500 text-white p-3 rounded-full cursor-pointer hover:bg-blue-600 transition-colors shadow-lg"
-        onClick={() => setShowModal(true)}
-      >
-        <svg
-          className="w-6 h-6"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+      <div className="relative">
+        <button
+          className="bg-green-500 text-white p-3 rounded-full cursor-pointer hover:bg-green-600 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
+          onClick={() => setShowModal(true)}
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.5 1.5M7 13l1.5 1.5M17 18h0m-6 0h0"
-          />
-        </svg>
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
+            />
+          </svg>
+        </button>
+
         {getTotalItems() > 0 && (
-          <span className="absolute -top-1 -right-1 bg-red-500 text-xs px-2 py-1 rounded-full min-w-[20px] text-center">
+          <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full min-w-[24px] h-6 flex items-center justify-center shadow-md">
             {getTotalItems()}
           </span>
         )}
