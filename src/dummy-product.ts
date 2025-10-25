@@ -358,4 +358,23 @@ export const dummyProducts: Product[] = [
       origin: "USA",
     },
   },
+  {
+    id: 6934689287077,
+    name: "Kids Puzzle Set",
+    price: 14.99,
+    description:
+      "Educational puzzle set for kids to enhance problem-solving skills. Fun and educational!",
+    image:
+      "https://images.unsplash.com/photo-1588350834945-2613a64277b8?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=80",
+    category: "Toys",
+    inStock: true,
+    quantity: 35,
+    gender: "Kids",
+    features: ["100 pieces", "Colorful design", "Safe materials"],
+    specifications: {
+      material: "Cardboard",
+      care: "Store in dry place",
+      origin: "USA",
+    },
+  },
 ];
