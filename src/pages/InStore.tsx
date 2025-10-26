@@ -57,7 +57,7 @@ const InStore = () => {
         position: "top-center",
         autoClose: 2000,
       });
-      setShowScanner(false);
+      // setShowScanner(false);
     } else {
       toast.error(
         `Product with barcode "${decodedText}" not found. Please scan a valid product barcode.`,
