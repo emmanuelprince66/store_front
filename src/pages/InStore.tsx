@@ -14,10 +14,12 @@ import ScannerModal from "../components/ScannerModal";
 import { CartProvider } from "../context/CartContext";
 import type { Product, StoreData } from "../type";
 import useFetchData from "../useFetchDataHook";
+import { Checkout } from "./Checkout";
 
 const InStore = () => {
   const [showScanner, setShowScanner] = useState(false);
   const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
+  const [currentView, setCurrentView] = useState("store");
 
   // Fetch store data
   const {
@@ -68,6 +70,16 @@ const InStore = () => {
       );
     }
   };
+
+  if (currentView === "checkout") {
+    return (
+      <CartProvider>
+        <div className="min-h-screen bg-gray-50 font-['Montserrat']">
+          <Checkout onBack={() => setCurrentView("store")} />
+        </div>
+      </CartProvider>
+    );
+  }
 
   if (error) {
     return (
@@ -151,7 +163,7 @@ const InStore = () => {
                     </p>
                   </div>
                 </div>
-                <CartIcon />
+                <CartIcon onCheckout={() => setCurrentView("checkout")} />
               </div>
             </div>
           </header>
