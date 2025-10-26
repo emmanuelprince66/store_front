@@ -30,6 +30,7 @@ const useFetchData = <T>({
 
   const fetchData = async () => {
     const storeUrl = getStoreUrl();
+
     if (!storeUrl) {
       setState({
         data: null,
@@ -40,6 +41,8 @@ const useFetchData = <T>({
     }
 
     const fullUrl = `${BaseUrl}/${storeUrl}`;
+    console.log("Fetching from:", fullUrl);
+
     setState((prev) => ({ ...prev, isLoading: true }));
 
     try {
@@ -48,10 +51,7 @@ const useFetchData = <T>({
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          // Add any other required headers here
-          // 'Authorization': 'Bearer your-token-here' // if you need authentication
         },
-        credentials: "include", // Include cookies if needed
       });
 
       if (!response.ok) {
@@ -68,6 +68,7 @@ const useFetchData = <T>({
       throw errorMessage;
     }
   };
+
   useEffect(() => {
     let isMounted = true;
 
@@ -78,7 +79,22 @@ const useFetchData = <T>({
           if (!storeUrl) return;
 
           setState((prev) => ({ ...prev, isLoading: true }));
-          const response = await fetch(`${BaseUrl}/${storeUrl}`);
+
+          const fullUrl = `${BaseUrl}/${storeUrl}`;
+          console.log("Auto-fetching from:", fullUrl);
+
+          const response = await fetch(fullUrl, {
+            method: "GET",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
           const data = await response.json();
 
           if (isMounted) {
