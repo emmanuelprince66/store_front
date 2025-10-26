@@ -1,14 +1,12 @@
 import type { FC } from "react";
-import { useContext, useState } from "react";
-import { CartContext } from "../context/CartContext";
-import { dummyProducts } from "../dummy-product";
+import { useState } from "react";
 const BarcodeScanner: FC = () => {
   const [barcode, setBarcode] = useState("");
-  const { addToCart } = useContext(CartContext);
+  // const { addToCart } = useContext(CartContext);
 
   const handleAdd = () => {
-    const id = parseInt(barcode);
-    const product = dummyProducts.find((p) => p.id === id);
+    // const id = parseInt(barcode);
+    // const product = dummyProducts.find((p) => p.id === id);
     // if (product) {
     //   addToCart(product, 1);
     //   setBarcode("");

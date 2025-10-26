@@ -39,7 +39,7 @@ export const ProductModal = ({
     : product.status;
   const isOutOfStock = currentStatus === "OUT-OF-STOCK";
   const isLowStock = currentStatus === "LOW";
-  const isInStock = currentStatus === "IN-STOCK";
+  // const isInStock = currentStatus === "IN-STOCK";
 
   const handleAddToCart = () => {
     if (hasVariations && !selectedVariation) return;

@@ -27,7 +27,7 @@ export const ProductCard = ({
   // Check if product is available for purchase
   const isOutOfStock = product.status === "OUT-OF-STOCK";
   const isLowStock = product.status === "LOW";
-  const isInStock = product.status === "IN-STOCK";
+  // const isInStock = product.status === "IN-STOCK";
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
