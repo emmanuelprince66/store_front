@@ -9,12 +9,12 @@ const BarcodeScanner: FC = () => {
   const handleAdd = () => {
     const id = parseInt(barcode);
     const product = dummyProducts.find((p) => p.id === id);
-    if (product) {
-      addToCart(product, 1);
-      setBarcode("");
-    } else {
-      alert("Product not found.");
-    }
+    // if (product) {
+    //   addToCart(product, 1);
+    //   setBarcode("");
+    // } else {
+    //   alert("Product not found.");
+    // }
   };
 
   return (

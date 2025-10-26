@@ -1,27 +1,71 @@
+// ============================================
+// FILE: components/ProductCard.tsx
+// ============================================
+
 import { useContext, useState } from "react";
 import { CartContext } from "../context/CartContext";
-import type { Product } from "../dummy-product";
+import type { Product } from "../type";
 import { Modal } from "./Modal";
-import ProductModal from "./ProductModal";
+import { ProductModal } from "./ProductModal";
 
-interface ProductCardProps {
+export const ProductCard = ({
+  product,
+  currency,
+}: {
   product: Product;
-}
-
-const ProductCard = ({ product }: ProductCardProps) => {
+  currency: string;
+}) => {
   const { addToCart, cart } = useContext(CartContext);
   const [showModal, setShowModal] = useState(false);
 
+  const hasVariations = product.variations && product.variations.length > 0;
   const isInCart = cart.some((item) => item.product.id === product.id);
+  const displayPrice = hasVariations
+    ? Math.min(...product.variations!.map((v) => v.selling_price))
+    : product.selling_price || 0;
 
-  const handleAdd = (e: React.MouseEvent) => {
+  // Check if product is available for purchase
+  const isOutOfStock = product.status === "OUT-OF-STOCK";
+  const isLowStock = product.status === "LOW";
+  const isInStock = product.status === "IN-STOCK";
+
+  const handleQuickAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isInCart && !product.hasVariations) {
+
+    // Don't allow adding out of stock items
+    if (isOutOfStock) return;
+
+    if (!hasVariations && !isInCart && !isOutOfStock) {
       addToCart(product, 1);
-    } else if (product.hasVariations) {
+    } else {
       setShowModal(true);
     }
   };
+
+  // Get stock status display info
+  const getStockStatus = () => {
+    if (isOutOfStock) {
+      return {
+        dotColor: "bg-red-500",
+        textColor: "text-red-700",
+        label: "Out of Stock",
+      };
+    }
+    if (isLowStock) {
+      return {
+        dotColor: "bg-yellow-500",
+        textColor: "text-yellow-700",
+        label: `Low Stock (${product.quantity})`,
+      };
+    }
+    return {
+      dotColor: "bg-green-500",
+      textColor: "text-green-700",
+      label: `In Stock (${product.quantity})`,
+    };
+  };
+
+  const stockStatus = getStockStatus();
 
   return (
     <>
@@ -29,111 +73,101 @@ const ProductCard = ({ product }: ProductCardProps) => {
         onClick={() => setShowModal(true)}
         className="group bg-white rounded-2xl cursor-pointer shadow-sm hover:shadow-2xl transition-all duration-300 overflow-hidden border border-gray-100 transform hover:-translate-y-1"
       >
-        {/* Image Section */}
         <div className="relative overflow-hidden">
           <img
-            src={product.image}
+            src={
+              product.image ||
+              "https://via.placeholder.com/400x300?text=No+Image"
+            }
             alt={product.name}
             className="w-full h-56 object-cover group-hover:scale-110 transition-transform duration-500"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src =
+                "https://via.placeholder.com/400x300?text=No+Image";
+            }}
           />
 
           {/* Badges */}
           <div className="absolute top-3 left-3 flex flex-col gap-2">
-            {product.hasVariations && (
+            {hasVariations && (
               <span className="bg-blue-500 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-lg">
-                Multiple Options
+                {product.variations!.length} Options
               </span>
             )}
-            {!product.inStock && (
+
+            {isOutOfStock && (
               <span className="bg-red-500 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-lg">
                 Out of Stock
               </span>
             )}
+
+            {isLowStock && (
+              <span className="bg-yellow-500 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-lg">
+                Low Stock
+              </span>
+            )}
           </div>
 
-          {/* Quick View Button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowModal(true);
-            }}
-            className="absolute top-3 right-3 bg-white bg-opacity-90 hover:bg-green-500 p-2.5 rounded-full shadow-lg transition-all group/btn"
-          >
-            <svg
-              className="w-5 h-5 text-gray-600 group-hover/btn:text-white transition-colors"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-              />
-            </svg>
-          </button>
-
-          {/* Category Badge */}
           <div className="absolute bottom-3 left-3">
-            <span className="bg-white bg-opacity-90 text-gray-800 text-xs font-semibold px-3 py-1 rounded-full">
+            <span className="bg-white bg-opacity-90 text-gray-800 text-xs font-semibold px-3 py-1 rounded-full capitalize">
               {product.category}
             </span>
           </div>
         </div>
 
-        {/* Content Section */}
         <div className="p-5">
           <div className="flex items-start justify-between mb-2">
-            <h3 className="text-lg font-bold text-gray-900 line-clamp-2 flex-1 pr-2">
+            <h3 className="text-sm font-bold text-gray-900 line-clamp-2 flex-1 pr-2">
               {product.name}
             </h3>
             <div className="flex-shrink-0">
-              <p className="text-2xl font-bold text-green-600">
-                ₦{product.price.toFixed(2)}
+              <p className="text-sm font-bold text-green-600">
+                {currency}
+                {hasVariations
+                  ? `${displayPrice.toFixed(2)}+`
+                  : displayPrice.toFixed(2)}
               </p>
             </div>
           </div>
 
-          <p className="text-sm text-gray-600 mb-4 line-clamp-2 leading-relaxed">
-            {product.description}
-          </p>
-
-          {/* Stock Info */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center text-sm">
-              {product.inStock ? (
-                <>
-                  <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                  <span className="text-green-700 font-medium">In Stock</span>
-                </>
-              ) : (
-                <>
-                  <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
-                  <span className="text-red-700 font-medium">Out of Stock</span>
-                </>
-              )}
+              <div
+                className={`w-2 h-2 ${stockStatus.dotColor} rounded-full mr-2`}
+              ></div>
+              <span className={`${stockStatus.textColor} font-medium`}>
+                {stockStatus.label}
+              </span>
             </div>
-            <span className="text-xs text-gray-500">{product.gender}</span>
           </div>
 
-          {/* Action Button */}
           <button
-            onClick={handleAdd}
-            disabled={isInCart && !product.hasVariations}
+            onClick={handleQuickAdd}
+            disabled={isOutOfStock || (isInCart && !hasVariations)}
             className={`w-full py-3 px-4 rounded-xl font-semibold transition-all transform ${
-              isInCart && !product.hasVariations
-                ? "bg-gray-100 text-gray-500 cursor-not-allowed"
+              isOutOfStock || (isInCart && !hasVariations)
+                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
                 : "bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 hover:shadow-lg hover:scale-105 active:scale-95"
             }`}
           >
-            {isInCart && !product.hasVariations ? (
+            {isOutOfStock ? (
+              <span className="flex items-center justify-center">
+                <svg
+                  className="w-5 h-5 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+                Out of Stock
+              </span>
+            ) : isInCart && !hasVariations ? (
               <span className="flex items-center justify-center">
                 <svg
                   className="w-5 h-5 mr-2"
@@ -148,7 +182,7 @@ const ProductCard = ({ product }: ProductCardProps) => {
                 </svg>
                 Added to Cart
               </span>
-            ) : product.hasVariations ? (
+            ) : hasVariations ? (
               "Select Options"
             ) : (
               <span className="flex items-center justify-center">
@@ -173,10 +207,12 @@ const ProductCard = ({ product }: ProductCardProps) => {
       </div>
 
       <Modal isOpen={showModal} onClose={() => setShowModal(false)}>
-        <ProductModal product={product} onClose={() => setShowModal(false)} />
+        <ProductModal
+          product={product}
+          onClose={() => setShowModal(false)}
+          currency={currency}
+        />
       </Modal>
     </>
   );
 };
-
-export default ProductCard;

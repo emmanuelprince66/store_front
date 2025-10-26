@@ -300,7 +300,10 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
                     </div>
                   </div>
                   <span className="font-semibold text-sm flex-shrink-0">
-                    ₦{formatCurrency(item.product.price * item.quantity)}
+                    ₦
+                    {formatCurrency(
+                      item?.product?.cost_price || 0 * item.quantity
+                    )}
                   </span>
                 </div>
               ))}

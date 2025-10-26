@@ -1,44 +1,61 @@
-import type { FC } from "react";
 import { useMemo, useState } from "react";
-import { dummyProducts } from "../dummy-product";
-import ProductCard from "./ProductCard";
+import type { Product } from "../type";
+import { ProductCardSkeleton } from "./CardSkeleton";
+import { ProductCard } from "./ProductCard";
 
-const ProductList: FC = () => {
+interface ProductListProps {
+  products: Product[];
+  categories: string[];
+  currency: string;
+  isLoading: boolean;
+}
+
+export const ProductList = ({
+  products,
+  categories,
+  currency,
+  isLoading,
+}: ProductListProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [selectedGender, setSelectedGender] = useState("All");
 
-  // Extract unique categories and genders
-  const categories = useMemo(() => {
-    const cats = new Set(dummyProducts.map((p) => p.category));
-    return ["All", ...Array.from(cats)];
-  }, []);
-
-  // const genders = useMemo(() => {
-  //   const gens = new Set(dummyProducts.map((p) => p.gender));
-  //   return ["All", ...Array.from(gens)];
-  // }, []);
-
-  // Filter products
   const filteredProducts = useMemo(() => {
-    return dummyProducts.filter((product) => {
-      const matchesSearch =
-        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchTerm.toLowerCase());
+    return products.filter((product) => {
+      const matchesSearch = product.name
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
       const matchesCategory =
         selectedCategory === "All" || product.category === selectedCategory;
-      const matchesGender =
-        selectedGender === "All" || product.gender === selectedGender;
-
-      return matchesSearch && matchesCategory && matchesGender;
+      return matchesSearch && matchesCategory;
     });
-  }, [searchTerm, selectedCategory, selectedGender]);
+  }, [searchTerm, selectedCategory, products]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
+          <div className="h-14 bg-gray-200 rounded-xl animate-pulse"></div>
+          <div className="flex gap-2">
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="h-10 bg-gray-200 rounded-lg w-24 animate-pulse"
+              ></div>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {[...Array(8)].map((_, i) => (
+            <ProductCardSkeleton key={i} />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Search and Filters Section */}
       <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
-        {/* Search Bar */}
         <div className="max-w-2xl mx-auto">
           <div className="relative">
             <input
@@ -86,54 +103,22 @@ const ProductList: FC = () => {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
-          {/* Category Filter */}
-          <div className="w-full sm:w-auto">
-            <label className="block text-sm font-medium text-gray-700 mb-2 sm:hidden">
-              Category
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {categories.map((category) => (
-                <button
-                  key={category}
-                  onClick={() => setSelectedCategory(category)}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                    selectedCategory === category
-                      ? "bg-gradient-to-r from-green-500 to-green-600 text-white shadow-md transform scale-105"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  {category}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Gender Filter */}
-          <div className="w-full sm:w-auto">
-            <label className="block text-sm font-medium text-gray-700 mb-2 sm:hidden">
-              For
-            </label>
-            {/* <div className="flex flex-wrap gap-2">
-              {genders.map((gender) => (
-                <button
-                  key={gender}
-                  onClick={() => setSelectedGender(gender)}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                    selectedGender === gender
-                      ? "bg-gradient-to-r from-green-500 to-green-600 text-white shadow-md transform scale-105"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  {gender}
-                </button>
-              ))}
-            </div> */}
-          </div>
+        <div className="flex flex-wrap gap-2 justify-center">
+          {categories.map((category) => (
+            <button
+              key={category}
+              onClick={() => setSelectedCategory(category)}
+              className={`px-4 py-2 rounded-lg font-medium transition-all capitalize ${
+                selectedCategory === category
+                  ? "bg-gradient-to-r from-green-500 to-green-600 text-white shadow-md transform scale-105"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              {category}
+            </button>
+          ))}
         </div>
 
-        {/* Results Count */}
         <div className="text-center">
           <p className="text-sm text-gray-600">
             Showing{" "}
@@ -145,11 +130,14 @@ const ProductList: FC = () => {
         </div>
       </div>
 
-      {/* Products Grid */}
       {filteredProducts.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProducts.map((product) => (
-            <ProductCard key={product.id} product={product} />
+            <ProductCard
+              key={product.id}
+              product={product}
+              currency={currency}
+            />
           ))}
         </div>
       ) : (
@@ -177,7 +165,6 @@ const ProductList: FC = () => {
             onClick={() => {
               setSearchTerm("");
               setSelectedCategory("All");
-              setSelectedGender("All");
             }}
             className="px-6 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:from-green-600 hover:to-green-700 transition-all"
           >
@@ -188,5 +175,3 @@ const ProductList: FC = () => {
     </div>
   );
 };
-
-export default ProductList;

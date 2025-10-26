@@ -70,7 +70,7 @@ const CartModal = ({ onClose, onCheckout }: CartModalProps) => {
                   {item.product.name}
                 </h4>
                 <p className="text-sm text-gray-600">
-                  N{item.product.price.toFixed(2)} each
+                  N{item?.product?.selling_price?.toFixed(2)} each
                 </p>
               </div>
 
