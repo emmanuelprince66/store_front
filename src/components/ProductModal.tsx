@@ -168,7 +168,7 @@ export const ProductModal = ({
               {product.variations!.map((variation) => {
                 const varIsOutOfStock = variation.status === "OUT-OF-STOCK";
                 const varIsLowStock = variation.status === "LOW";
-                const varIsInStock = variation.status === "IN-STOCK";
+                // const varIsInStock = variation.status === "IN-STOCK";
 
                 return (
                   <button
