@@ -10,9 +10,16 @@ interface Address {
   altPhone: string;
   email: string;
   shippingAddress: string;
-  country: string; // use ISO code or name (we’ll use ISO code)
-  state: string; // ISO code or name
+  country: string;
+  state: string;
   city: string;
+}
+
+interface CustomerDetails {
+  name: string;
+  phone: string;
+  address: string;
+  tableRoomNumber: string;
 }
 
 interface ShippingOption {
@@ -22,9 +29,13 @@ interface ShippingOption {
 
 interface CheckoutProps {
   onBack: () => void;
+  type?: "in-store" | "out-store";
 }
 
-export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
+export const Checkout: React.FC<CheckoutProps> = ({
+  onBack,
+  type = "out-store",
+}) => {
   const { cart, getTotalPrice, updateQuantity } = useContext(CartContext);
   const subtotal = getTotalPrice();
 
@@ -34,6 +45,14 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
   const [selectedShipping, setSelectedShipping] =
     useState<ShippingOption | null>(null);
   const [showShippingModal, setShowShippingModal] = useState(false);
+
+  const [customerDetails, setCustomerDetails] =
+    useState<CustomerDetails | null>(null);
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [editCustomer, setEditCustomer] = useState<CustomerDetails | null>(
+    null
+  );
+
   const [note, setNote] = useState("");
   const [couponCode, setCouponCode] = useState("");
 
@@ -56,20 +75,34 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
     setEditAddress(null);
   };
 
+  const handleCustomerSave = (details: CustomerDetails) => {
+    setCustomerDetails(details);
+    setShowCustomerModal(false);
+    setEditCustomer(null);
+  };
+
   const handleShippingSelect = (option: ShippingOption) => {
     setSelectedShipping(option);
     setShowShippingModal(false);
   };
 
   const handlePlaceOrder = () => {
-    if (!address) {
-      alert("Please add delivery details.");
-      return;
+    if (type === "out-store") {
+      if (!address) {
+        alert("Please add delivery details.");
+        return;
+      }
+      if (!selectedShipping) {
+        alert("Please select a shipping method.");
+        return;
+      }
+    } else {
+      if (!customerDetails) {
+        alert("Please add customer details.");
+        return;
+      }
     }
-    if (!selectedShipping) {
-      alert("Please select a shipping method.");
-      return;
-    }
+
     console.log("Initiate Paystack payment for order");
     alert("Order placed successfully! (Simulated Paystack payment)");
     onBack();
@@ -84,7 +117,8 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
     alert("Coupon applied! (Simulated)");
   };
 
-  const total = subtotal + (selectedShipping?.price || 0);
+  const total =
+    type === "out-store" ? subtotal + (selectedShipping?.price || 0) : subtotal;
 
   const emptyAddress: Address = {
     firstName: "",
@@ -98,7 +132,15 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
     city: "",
   };
 
+  const emptyCustomer: CustomerDetails = {
+    name: "",
+    phone: "",
+    address: "",
+    tableRoomNumber: "",
+  };
+
   const currentAddressForm = editAddress || emptyAddress;
+  const currentCustomerForm = editCustomer || emptyCustomer;
 
   const handleFormChange = (field: keyof Address, value: string) => {
     setEditAddress((prev) => ({
@@ -107,12 +149,20 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
     }));
   };
 
-  // For dropdown options
+  const handleCustomerFormChange = (
+    field: keyof CustomerDetails,
+    value: string
+  ) => {
+    setEditCustomer((prev) => ({
+      ...(prev || emptyCustomer),
+      [field]: value,
+    }));
+  };
+
   const [countryList] = useState(() => Country.getAllCountries());
   const [stateList, setStateList] = useState(() => [] as any[]);
   const [cityList, setCityList] = useState(() => [] as any[]);
 
-  // When country changes, load states
   useEffect(() => {
     if (currentAddressForm.country) {
       const states = State.getStatesOfCountry(currentAddressForm.country);
@@ -120,12 +170,10 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
     } else {
       setStateList([]);
     }
-    // Reset downstream
     handleFormChange("state", "");
     handleFormChange("city", "");
   }, [currentAddressForm.country]);
 
-  // When state changes, load cities
   useEffect(() => {
     if (currentAddressForm.country && currentAddressForm.state) {
       const cities = City.getCitiesOfState(
@@ -164,101 +212,158 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-8">
-        {/* Left: Delivery & Shipping */}
         <div className="space-y-6">
-          <div className="bg-white rounded-2xl shadow border border-gray-200 p-6">
-            <h2 className="text-xl font-bold mb-4">Delivery Details</h2>
-            {!address ? (
-              <>
+          {type === "in-store" ? (
+            <div className="bg-white rounded-2xl shadow border border-gray-200 p-6">
+              <h2 className="text-xl font-bold mb-4">Customer Details</h2>
+              {!customerDetails ? (
                 <button
                   onClick={() => {
-                    setEditAddress(emptyAddress);
-                    setShowAddressModal(true);
+                    setEditCustomer(emptyCustomer);
+                    setShowCustomerModal(true);
                   }}
                   className="w-full border border-red-300 text-red-600 rounded-lg px-4 py-3 hover:bg-red-50 transition"
                 >
-                  Add delivery details
+                  Add customer details
                 </button>
-                {/* no error message by default */}
-              </>
-            ) : (
-              <div className="space-y-3 mb-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-semibold text-sm">
-                      {address.firstName} {address.lastName}
-                    </p>
-                    <p className="text-xs text-gray-600">{address.email}</p>
-                    <p className="text-xs text-gray-600">
-                      {address.phone}{" "}
-                      {address.altPhone && `, ${address.altPhone}`}
-                    </p>
+              ) : (
+                <div className="space-y-3 mb-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-semibold text-sm">
+                        {customerDetails.name}
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        {customerDetails.phone}
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        {customerDetails.address}
+                      </p>
+                      <p className="text-xs text-gray-600 mt-1">
+                        <span className="font-medium">Table/Room:</span>{" "}
+                        {customerDetails.tableRoomNumber}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setEditCustomer(customerDetails);
+                        setShowCustomerModal(true);
+                      }}
+                      className="text-green-600 text-sm hover:underline cursor-pointer"
+                    >
+                      Change
+                    </button>
                   </div>
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Note (Optional)
+                </label>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  rows={2}
+                  placeholder="Note (Optional)"
+                />
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="bg-white rounded-2xl shadow border border-gray-200 p-6">
+                <h2 className="text-xl font-bold mb-4">Delivery Details</h2>
+                {!address ? (
                   <button
                     onClick={() => {
-                      setEditAddress(address);
+                      setEditAddress(emptyAddress);
                       setShowAddressModal(true);
                     }}
-                    className="text-green-600 text-sm hover:underline cursor-pointer"
+                    className="w-full border border-red-300 text-red-600 rounded-lg px-4 py-3 hover:bg-red-50 transition"
                   >
-                    Change
+                    Add delivery details
                   </button>
+                ) : (
+                  <div className="space-y-3 mb-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-semibold text-sm">
+                          {address.firstName} {address.lastName}
+                        </p>
+                        <p className="text-xs text-gray-600">{address.email}</p>
+                        <p className="text-xs text-gray-600">
+                          {address.phone}{" "}
+                          {address.altPhone && `, ${address.altPhone}`}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setEditAddress(address);
+                          setShowAddressModal(true);
+                        }}
+                        className="text-green-600 text-sm hover:underline cursor-pointer"
+                      >
+                        Change
+                      </button>
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      {address.shippingAddress}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      {address.city && `${address.city}, `}
+                      {address.state}, {address.country}
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Note (Optional)
+                  </label>
+                  <textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    rows={2}
+                    placeholder="Note (Optional)"
+                  />
                 </div>
-                <p className="text-sm text-gray-600">
-                  {address.shippingAddress}
-                </p>
-                <p className="text-sm text-gray-600">
-                  {address.city && `${address.city}, `}
-                  {address.state}, {address.country}
-                </p>
               </div>
-            )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Note (Optional)
-              </label>
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                rows={2}
-                placeholder="Note (Optional)"
-              />
-            </div>
-          </div>
 
-          <div className="bg-white rounded-2xl shadow border border-gray-200 p-6">
-            <h2 className="text-xl font-bold mb-4">Shipping Method</h2>
-            {!selectedShipping ? (
-              <>
-                <p className="text-gray-600 mb-3">
-                  Click the button below to choose a shipping method
-                </p>
-                <button
-                  onClick={() => setShowShippingModal(true)}
-                  className="w-full border border-red-300 text-red-600 rounded-lg px-4 py-3 hover:bg-red-50 transition"
-                >
-                  SELECT A SHIPPING METHOD
-                </button>
-              </>
-            ) : (
-              <div className="space-y-2 mb-4">
-                <p className="font-semibold text-sm">{selectedShipping.name}</p>
-                <p className="text-green-600 text-sm">
-                  ₦{formatCurrency(selectedShipping.price)}
-                </p>
-                <button
-                  onClick={() => setShowShippingModal(true)}
-                  className="text-blue-600 text-sm hover:underline cursor-pointer"
-                >
-                  Change
-                </button>
+              <div className="bg-white rounded-2xl shadow border border-gray-200 p-6">
+                <h2 className="text-xl font-bold mb-4">Shipping Method</h2>
+                {!selectedShipping ? (
+                  <>
+                    <p className="text-gray-600 mb-3">
+                      Click the button below to choose a shipping method
+                    </p>
+                    <button
+                      onClick={() => setShowShippingModal(true)}
+                      className="w-full border border-red-300 text-red-600 rounded-lg px-4 py-3 hover:bg-red-50 transition"
+                    >
+                      SELECT A SHIPPING METHOD
+                    </button>
+                  </>
+                ) : (
+                  <div className="space-y-2 mb-4">
+                    <p className="font-semibold text-sm">
+                      {selectedShipping.name}
+                    </p>
+                    <p className="text-green-600 text-sm">
+                      ₦{formatCurrency(selectedShipping.price)}
+                    </p>
+                    <button
+                      onClick={() => setShowShippingModal(true)}
+                      className="text-blue-600 text-sm hover:underline cursor-pointer"
+                    >
+                      Change
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
 
-        {/* Right: Order & Payment */}
         <div className="space-y-6">
           <div className="bg-white rounded-2xl shadow border border-gray-200 p-6">
             <h2 className="text-xl font-bold mb-4">Your Order</h2>
@@ -302,7 +407,7 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
                   <span className="font-semibold text-sm flex-shrink-0">
                     ₦
                     {formatCurrency(
-                      item?.product?.cost_price || 0 * item.quantity
+                      (item?.product?.cost_price || 0) * item.quantity
                     )}
                   </span>
                 </div>
@@ -313,10 +418,12 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
                 <span>Subtotal</span>
                 <span>₦{formatCurrency(subtotal)}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span>Shipping</span>
-                <span>₦{formatCurrency(selectedShipping?.price || 0)}</span>
-              </div>
+              {type === "out-store" && (
+                <div className="flex justify-between text-sm">
+                  <span>Shipping</span>
+                  <span>₦{formatCurrency(selectedShipping?.price || 0)}</span>
+                </div>
+              )}
               <div className="flex items-center space-x-2 pt-2">
                 <input
                   type="text"
@@ -343,15 +450,22 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
 
           <div className="bg-white rounded-2xl shadow border border-gray-200 p-6">
             <div className="space-y-4 flex flex-col gap-4">
-              {/* Replace radio with button for paystack */}
               <button className="w-full py-3 rounded-lg max-w-[100px] font-semibold bg-blue-600 text-white hover:bg-blue-700 cursor-pointer">
                 PayStack
               </button>
               <button
                 onClick={handlePlaceOrder}
-                disabled={!address || !selectedShipping}
+                disabled={
+                  type === "out-store"
+                    ? !address || !selectedShipping
+                    : !customerDetails
+                }
                 className={`w-full py-3 rounded-lg font-semibold transition ${
-                  !address || !selectedShipping
+                  (
+                    type === "out-store"
+                      ? !address || !selectedShipping
+                      : !customerDetails
+                  )
                     ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                     : "bg-green-600 text-white hover:bg-green-700 cursor-pointer"
                 }`}
@@ -363,7 +477,123 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
         </div>
       </div>
 
-      {/* Address Modal */}
+      <Modal
+        isOpen={showCustomerModal}
+        onClose={() => {
+          setShowCustomerModal(false);
+          setEditCustomer(null);
+        }}
+      >
+        <div className="p-8 w-full">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-bold">Customer Details</h3>
+            <button
+              onClick={() => {
+                setShowCustomerModal(false);
+                setEditCustomer(null);
+              }}
+              className="text-gray-500 text-xl cursor-pointer"
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Name *
+              </label>
+              <input
+                type="text"
+                placeholder="Customer name"
+                value={currentCustomerForm.name}
+                onChange={(e) =>
+                  handleCustomerFormChange("name", e.target.value)
+                }
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Phone *
+              </label>
+              <input
+                type="tel"
+                placeholder="Phone number"
+                value={currentCustomerForm.phone}
+                onChange={(e) =>
+                  handleCustomerFormChange("phone", e.target.value)
+                }
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Address *
+              </label>
+              <input
+                type="text"
+                placeholder="Customer address"
+                value={currentCustomerForm.address}
+                onChange={(e) =>
+                  handleCustomerFormChange("address", e.target.value)
+                }
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Table/Room Number *
+              </label>
+              <input
+                type="text"
+                placeholder="e.g., Table 5 or Room 201"
+                value={currentCustomerForm.tableRoomNumber}
+                onChange={(e) =>
+                  handleCustomerFormChange("tableRoomNumber", e.target.value)
+                }
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="flex space-x-4 gap-3 pt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCustomerModal(false);
+                  setEditCustomer(null);
+                }}
+                className="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg hover:bg-gray-300 transition cursor-pointer font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const details = { ...currentCustomerForm };
+                  if (
+                    !details.name ||
+                    !details.phone ||
+                    !details.address ||
+                    !details.tableRoomNumber
+                  ) {
+                    alert("Please fill in all required fields");
+                    return;
+                  }
+                  handleCustomerSave(details);
+                }}
+                className="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition cursor-pointer font-semibold"
+              >
+                Save Details
+              </button>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
       <Modal
         isOpen={showAddressModal}
         onClose={() => {
@@ -371,7 +601,7 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
           setEditAddress(null);
         }}
       >
-        <div className="p-8  w-full">
+        <div className="p-8 w-full">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-bold">
               {editAddress ? "Edit Address" : "Delivery Details"}
@@ -387,7 +617,7 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
             </button>
           </div>
 
-          <form className="space-y-6">
+          <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <input
                 type="text"
@@ -395,7 +625,6 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
                 value={currentAddressForm.firstName}
                 onChange={(e) => handleFormChange("firstName", e.target.value)}
                 className="px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
               />
               <input
                 type="text"
@@ -417,7 +646,6 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
                   value={currentAddressForm.phone}
                   onChange={(e) => handleFormChange("phone", e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
                 />
               </div>
               <div>
@@ -440,21 +668,8 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
               value={currentAddressForm.email}
               onChange={(e) => handleFormChange("email", e.target.value)}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
             />
 
-            {/* <input
-              type="text"
-              placeholder="Street / Address *"
-              value={currentAddressForm.shippingAddress}
-              onChange={(e) =>
-                handleFormChange("shippingAddress", e.target.value)
-              }
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            /> */}
-
-            {/* Country / State / City selects */}
             <div className="grid grid-cols-2 gap-4 mt-4">
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -464,7 +679,6 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
                   value={currentAddressForm.country}
                   onChange={(e) => handleFormChange("country", e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
                 >
                   <option value="">Select country</option>
                   {countryList.map((c) => (
@@ -482,7 +696,6 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
                   value={currentAddressForm.state}
                   onChange={(e) => handleFormChange("state", e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
                   disabled={!stateList.length}
                 >
                   <option value="">Select state</option>
@@ -533,16 +746,15 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack }) => {
                 Save Address
               </button>
             </div>
-          </form>
+          </div>
         </div>
       </Modal>
 
-      {/* Shipping Modal */}
       <Modal
         isOpen={showShippingModal}
         onClose={() => setShowShippingModal(false)}
       >
-        <div className="p-8  w-full">
+        <div className="p-8 w-full">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-bold">Select Shipping</h3>
             <button

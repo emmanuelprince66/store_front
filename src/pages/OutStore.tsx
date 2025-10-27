@@ -62,7 +62,7 @@ export const OutStore = () => {
     return (
       <CartProvider>
         <div className="min-h-screen bg-gray-50 font-['Montserrat']">
-          <Checkout onBack={() => setCurrentView("store")} />
+          <Checkout type={"out-store"} onBack={() => setCurrentView("store")} />
         </div>
       </CartProvider>
     );
@@ -174,7 +174,7 @@ export const OutStore = () => {
           </div>
         </main>
 
-        <Footer />
+        <Footer storeData={storeData} />
       </div>
     </CartProvider>
   );

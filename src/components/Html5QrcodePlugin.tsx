@@ -9,6 +9,7 @@ interface Html5QrcodePluginProps {
   qrCodeSuccessCallback: (decodedText: string, decodedResult: any) => void;
   qrCodeErrorCallback?: (error: string) => void;
   verbose?: boolean;
+  onCameraReady?: () => void;
 }
 
 const Html5QrcodePlugin = ({
@@ -19,12 +20,12 @@ const Html5QrcodePlugin = ({
   qrCodeSuccessCallback,
   qrCodeErrorCallback,
   verbose = false,
+  onCameraReady,
 }: Html5QrcodePluginProps) => {
   const qrcodeRegionId = "html5qr-code-full-region";
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isMountedRef = useRef(true);
   const isInitializingRef = useRef(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
   useEffect(() => {
@@ -42,7 +43,6 @@ const Html5QrcodePlugin = ({
       }
 
       isInitializingRef.current = true;
-      setIsLoading(true);
 
       try {
         // Check camera permission first
@@ -113,7 +113,10 @@ const Html5QrcodePlugin = ({
             return;
           }
 
-          setIsLoading(false);
+          // Notify parent that camera is ready
+          if (onCameraReady) {
+            onCameraReady();
+          }
 
           // Apply custom styles after successful start
           setTimeout(() => {
@@ -177,7 +180,6 @@ const Html5QrcodePlugin = ({
           if (qrCodeErrorCallback) {
             qrCodeErrorCallback(errorMsg);
           }
-          setIsLoading(false);
         }
       } finally {
         isInitializingRef.current = false;
@@ -262,20 +264,6 @@ const Html5QrcodePlugin = ({
 
   return (
     <div className="w-full relative">
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/90 backdrop-blur-sm rounded-2xl z-10">
-          <div className="text-center">
-            <div className="relative w-16 h-16 mx-auto mb-4">
-              <div className="absolute inset-0 border-4 border-green-200 rounded-full"></div>
-              <div className="absolute inset-0 border-4 border-transparent border-t-green-600 rounded-full animate-spin"></div>
-            </div>
-            <p className="text-gray-700 font-semibold text-lg">
-              Loading camera...
-            </p>
-            <p className="text-gray-500 text-sm mt-1">Please wait</p>
-          </div>
-        </div>
-      )}
       <div id={qrcodeRegionId} className="w-full" />
     </div>
   );

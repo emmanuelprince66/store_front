@@ -75,7 +75,7 @@ const InStore = () => {
     return (
       <CartProvider>
         <div className="min-h-screen bg-gray-50 font-['Montserrat']">
-          <Checkout onBack={() => setCurrentView("store")} />
+          <Checkout type={"in-store"} onBack={() => setCurrentView("store")} />
         </div>
       </CartProvider>
     );
@@ -170,12 +170,13 @@ const InStore = () => {
         )}
 
         {/* Hero Banner */}
-        <div className="relative bg-gradient-to-r from-green-600 via-green-500 to-emerald-500 text-white overflow-hidden">
+        {/* bg-gradient-to-r from-green-600 via-green-500 to-emerald-500 */}
+        <div className="relative  text-white overflow-hidden">
           <div className="absolute inset-0">
             <img
               src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80"
               alt="Shopping background"
-              className="w-full h-full object-cover opacity-30"
+              className="w-full h-full object-cover "
             />
           </div>
 
@@ -294,7 +295,7 @@ const InStore = () => {
           />
         )}
 
-        <Footer />
+        <Footer storeData={storeData} />
       </div>
     </CartProvider>
   );

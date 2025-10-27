@@ -1,6 +1,6 @@
 // File: src/components/ScannerModal.tsx
 
-import { useContext } from "react";
+import { useContext, useState } from "react";
 import { CartContext } from "../context/CartContext";
 import Html5QrcodePlugin from "./Html5QrcodePlugin";
 
@@ -11,12 +11,17 @@ interface ScannerModalProps {
 
 const ScannerModal = ({ onClose, onScanSuccess }: ScannerModalProps) => {
   const { cart } = useContext(CartContext);
+  const [isCameraReady, setIsCameraReady] = useState(false);
 
   console.log("Current cart:", cart);
 
   const handleScanError = (error: string) => {
     // Silent error handling to avoid console spam
     console.warn("Scan error:", error);
+  };
+
+  const handleCameraReady = () => {
+    setIsCameraReady(true);
   };
 
   return (
@@ -64,13 +69,37 @@ const ScannerModal = ({ onClose, onScanSuccess }: ScannerModalProps) => {
             </p>
           </div>
 
-          <div className="scanner-container rounded-xl overflow-hidden border-4 border-green-500">
+          <div className="scanner-container rounded-xl overflow-hidden border-4 border-green-500 relative">
+            {/* Camera Loading Spinner - Shows in the scanner area */}
+            {!isCameraReady && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-30">
+                <div className="text-center">
+                  <div className="relative w-20 h-20 mx-auto mb-4">
+                    <div className="absolute inset-0 border-4 border-green-100 rounded-full"></div>
+                    <div className="absolute inset-0 border-4 border-transparent border-t-green-600 rounded-full animate-spin"></div>
+                    <div
+                      className="absolute inset-2 border-4 border-transparent border-t-green-400 rounded-full animate-spin"
+                      style={{
+                        animationDirection: "reverse",
+                        animationDuration: "1s",
+                      }}
+                    ></div>
+                  </div>
+                  <p className="text-gray-800 font-bold text-lg mb-1">
+                    Camera Loading
+                  </p>
+                  <p className="text-gray-500 text-sm">Please wait...</p>
+                </div>
+              </div>
+            )}
+
             <Html5QrcodePlugin
               fps={10}
               qrbox={250}
               disableFlip={false}
               qrCodeSuccessCallback={onScanSuccess}
               qrCodeErrorCallback={handleScanError}
+              onCameraReady={handleCameraReady}
             />
           </div>
 
@@ -87,6 +116,7 @@ const ScannerModal = ({ onClose, onScanSuccess }: ScannerModalProps) => {
         /* Scanner Container Styles */
         .scanner-container {
           background: #f9fafb;
+          min-height: 400px;
         }
 
         #html5qr-code-full-region {
@@ -139,6 +169,7 @@ const ScannerModal = ({ onClose, onScanSuccess }: ScannerModalProps) => {
 
           .scanner-container {
             border-width: 2px;
+            min-height: 300px;
           }
         }
       `}</style>
