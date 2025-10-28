@@ -5,6 +5,7 @@
 import { useContext, useState } from "react";
 import { CartContext } from "../context/CartContext";
 import type { Product, ProductVariation } from "../type";
+import { ProductImageWithPlaceholder } from "./ImagePlaceHolder";
 
 interface ProductBottomDrawerProps {
   product: Product;
@@ -79,17 +80,9 @@ const ProductBottomDrawer = ({
 
           {/* Product Image */}
           <div className="relative bg-gray-100">
-            <img
-              src={
-                product.image ||
-                "https://via.placeholder.com/800x400?text=No+Image"
-              }
-              alt={product.name}
+            <ProductImageWithPlaceholder
+              product={product}
               className="w-full h-64 object-cover"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src =
-                  "https://via.placeholder.com/800x400?text=No+Image";
-              }}
             />
 
             {/* Category Badge */}

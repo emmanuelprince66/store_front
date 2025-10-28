@@ -5,6 +5,7 @@
 import { useContext, useState } from "react";
 import { CartContext } from "../context/CartContext";
 import type { Product, ProductVariation } from "../type";
+import { ProductImageWithPlaceholder } from "./ImagePlaceHolder";
 
 interface ProductModalProps {
   product: Product;
@@ -107,16 +108,9 @@ export const ProductModal = ({
       </button>
 
       <div className="relative bg-gray-100">
-        <img
-          src={
-            product.image || "https://via.placeholder.com/800x600?text=No+Image"
-          }
-          alt={product.name}
-          className="w-full h-80 md:h-96 object-cover"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src =
-              "https://via.placeholder.com/800x600?text=No+Image";
-          }}
+        <ProductImageWithPlaceholder
+          product={product}
+          className="w-full h-64 object-cover"
         />
 
         <div className="absolute top-4 left-4 flex flex-col gap-2">

@@ -5,6 +5,7 @@
 import { useContext, useState } from "react";
 import { CartContext } from "../context/CartContext";
 import type { Product } from "../type";
+import { ProductImageWithPlaceholder } from "./ImagePlaceHolder";
 import { Modal } from "./Modal";
 import { ProductModal } from "./ProductModal";
 
@@ -67,6 +68,8 @@ export const ProductCard = ({
 
   const stockStatus = getStockStatus();
 
+  console.log("ProductCard rendered", product);
+
   return (
     <>
       <div
@@ -74,7 +77,11 @@ export const ProductCard = ({
         className="group bg-white rounded-2xl cursor-pointer shadow-sm hover:shadow-2xl transition-all duration-300 overflow-hidden border border-gray-100 transform hover:-translate-y-1"
       >
         <div className="relative overflow-hidden">
-          <img
+          <ProductImageWithPlaceholder
+            product={product}
+            className="w-full h-64 object-cover"
+          />
+          {/* <img
             src={
               product.image ||
               "https://via.placeholder.com/400x300?text=No+Image"
@@ -85,7 +92,7 @@ export const ProductCard = ({
               (e.target as HTMLImageElement).src =
                 "https://via.placeholder.com/400x300?text=No+Image";
             }}
-          />
+          /> */}
 
           {/* Badges */}
           <div className="absolute top-3 left-3 flex flex-col gap-2">

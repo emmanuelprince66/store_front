@@ -5,26 +5,49 @@ import { Footer } from "../components/Footer";
 import { ProductList } from "../components/ProductList";
 import { CartProvider } from "../context/CartContext";
 import type { StoreData } from "../type";
-import useFetchData from "../useFetchDataHook"; // Import your existing hook
+import useFetchData from "../useFetchDataHook";
 import { Checkout } from "./Checkout";
 
 export const OutStore = () => {
   const [currentView, setCurrentView] = useState("store");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
+    null
+  );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
-  // Use your existing hook with mycliq
+  // Fetch store data with filters
   const {
     data: storeData,
     isLoading,
     error,
+    hasMore,
+    totalPages,
+    // fetchData,
   } = useFetchData<StoreData>({
     store_url: "cap&",
+    category_id: selectedCategoryId,
+    search: searchQuery,
+    page: currentPage,
+    limit: 20,
   });
 
-  console.log("Store data:", storeData);
+  // console.log("Store data:", storeData);
 
-  const categories = storeData?.categories
-    ? ["All", ...storeData.categories.map((c) => c.name)]
-    : ["All"];
+  const handleCategoryChange = (categoryId: string | null) => {
+    setSelectedCategoryId(categoryId);
+    setCurrentPage(1); // Reset to first page when category changes
+  };
+
+  const handleSearchChange = (search: string) => {
+    setSearchQuery(search);
+    setCurrentPage(1); // Reset to first page when search changes
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   if (error) {
     return (
@@ -71,7 +94,7 @@ export const OutStore = () => {
   return (
     <CartProvider>
       <div className="flex flex-col min-h-screen bg-gray-50 font-['Montserrat']">
-        {isLoading ? (
+        {isLoading && !storeData ? (
           <HeaderSkeleton />
         ) : (
           <header className="bg-white shadow-md z-20 sticky top-0">
@@ -79,10 +102,10 @@ export const OutStore = () => {
               <div className="flex items-center justify-between h-20">
                 <div className="flex items-center space-x-3">
                   <div className="bg-gradient-to-br from-green-500 to-green-600 p-2 rounded-xl shadow-lg overflow-hidden">
-                    {storeData?.info.logo ? (
+                    {storeData?.results?.info.logo ? (
                       <img
-                        src={storeData.info.logo}
-                        alt={storeData.info.name}
+                        src={storeData.results.info.logo}
+                        alt={storeData.results.info.name}
                         className="w-8 h-8 object-cover rounded"
                         onError={(e) => {
                           const img = e.target as HTMLImageElement;
@@ -94,7 +117,7 @@ export const OutStore = () => {
                     ) : null}
                     <svg
                       className={`w-8 h-8 text-white ${
-                        storeData?.info.logo ? "hidden" : ""
+                        storeData?.results?.info.logo ? "hidden" : ""
                       }`}
                       fill="none"
                       stroke="currentColor"
@@ -110,10 +133,10 @@ export const OutStore = () => {
                   </div>
                   <div>
                     <p className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-green-600 to-green-500 bg-clip-text text-transparent">
-                      {storeData?.info.name || "Loading..."}
+                      {storeData?.results?.info.name || "Loading..."}
                     </p>
                     <p className="text-xs text-gray-600 hidden sm:block">
-                      {storeData?.info.state || ""}
+                      {storeData?.results?.info.state || ""}
                     </p>
                   </div>
                 </div>
@@ -123,38 +146,46 @@ export const OutStore = () => {
           </header>
         )}
 
-        <div className="relative bg-gradient-to-r from-green-600 via-green-500 to-emerald-500 text-white overflow-hidden">
+        <div className="relative text-white overflow-hidden">
           <div className="absolute inset-0">
             <img
               src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80"
               alt="Shopping background"
-              className="w-full h-full object-cover opacity-30"
+              className="w-full h-full object-cover"
             />
+            {/* Dark overlay for better text visibility */}
+            <div className="absolute inset-0 bg-gradient-to-r from-green-900/70 via-green-800/60 to-green-900/70"></div>
           </div>
 
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-20">
             <div className="text-center">
-              <h1 className="text-3xl sm:text-5xl font-bold mb-4 drop-shadow-lg">
-                {storeData?.info.tag_line ||
-                  `Welcome to ${storeData?.info.name || "Our Store"}`}
+              <h1 className="text-3xl sm:text-5xl font-bold mb-4 text-white drop-shadow-2xl [text-shadow:_0_2px_10px_rgb(0_0_0_/_80%)]">
+                {isLoading && !storeData
+                  ? "Loading..."
+                  : storeData?.results?.info.tag_line ||
+                    `Welcome to ${
+                      storeData?.results?.info.name || "Our Store"
+                    }`}
               </h1>
-              <p className="text-lg sm:text-xl mb-6 text-green-50 max-w-2xl mx-auto">
-                {storeData?.info.description ||
-                  "Discover amazing products at unbeatable prices. Quality guaranteed, satisfaction assured."}
+              <p className="text-lg sm:text-xl mb-6 text-white max-w-2xl mx-auto drop-shadow-lg [text-shadow:_0_1px_8px_rgb(0_0_0_/_70%)]">
+                {isLoading && !storeData
+                  ? "Please wait..."
+                  : storeData?.results?.info.description ||
+                    "Discover amazing products at unbeatable prices. Quality guaranteed, satisfaction assured."}
               </p>
               <div className="flex flex-wrap justify-center gap-4">
-                <div className="bg-white bg-opacity-20 backdrop-blur-sm px-6 py-3 rounded-full">
-                  <p className="text-sm font-semibold text-black">
+                <div className="bg-white/90 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg">
+                  <p className="text-sm font-semibold text-gray-900">
                     🚚 Free Shipping
                   </p>
                 </div>
-                <div className="bg-white bg-opacity-20 backdrop-blur-sm px-6 py-3 rounded-full">
-                  <p className="text-sm font-semibold text-black">
+                <div className="bg-white/90 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg">
+                  <p className="text-sm font-semibold text-gray-900">
                     💯 Quality Assured
                   </p>
                 </div>
-                <div className="bg-white bg-opacity-20 backdrop-blur-sm px-6 py-3 rounded-full">
-                  <p className="text-sm font-semibold text-black">
+                <div className="bg-white/90 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg">
+                  <p className="text-sm font-semibold text-gray-900">
                     🔒 Secure Payment
                   </p>
                 </div>
@@ -166,10 +197,19 @@ export const OutStore = () => {
         <main className="flex-1 bg-gray-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <ProductList
-              products={storeData?.products || []}
-              categories={categories}
-              currency={storeData?.info.currency || "₦"}
+              products={storeData?.results?.products || []}
+              categories={storeData?.results?.categories || []}
+              currency={storeData?.results?.info.currency || "₦"}
               isLoading={isLoading}
+              selectedCategoryId={selectedCategoryId}
+              onCategoryChange={handleCategoryChange}
+              searchQuery={searchQuery}
+              onSearchChange={handleSearchChange}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+              hasMore={hasMore}
+              totalProducts={storeData?.total || 0}
             />
           </div>
         </main>

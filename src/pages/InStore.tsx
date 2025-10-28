@@ -20,27 +20,50 @@ const InStore = () => {
   const [showScanner, setShowScanner] = useState(false);
   const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
   const [currentView, setCurrentView] = useState("store");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
+    null
+  );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
-  // Fetch store data
+  // Fetch store data with filters
   const {
     data: storeData,
     isLoading,
     error,
+    hasMore,
+    totalPages,
+    // fetchData,
   } = useFetchData<StoreData>({
-    store_url: "cap&", // Change this to your store URL
+    store_url: "babspatsuperstore",
+    category_id: selectedCategoryId,
+    search: searchQuery,
+    page: currentPage,
+    limit: 20,
   });
 
   console.log("InStore data:", storeData);
 
-  const categories = storeData?.categories
-    ? ["All", ...storeData.categories.map((c) => c.name)]
-    : ["All"];
+  const handleCategoryChange = (categoryId: string | null) => {
+    setSelectedCategoryId(categoryId);
+    setCurrentPage(1); // Reset to first page when category changes
+  };
+
+  const handleSearchChange = (search: string) => {
+    setSearchQuery(search);
+    setCurrentPage(1); // Reset to first page when search changes
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const handleScanSuccess = (decodedText: string, decodedResult: any) => {
     console.log("Scan success:", decodedText);
     console.log("Decoded result:", decodedResult);
 
-    if (!storeData?.products) {
+    if (!storeData?.results?.products) {
       toast.warning("Products not loaded yet. Please try again.", {
         position: "top-center",
         autoClose: 3000,
@@ -49,7 +72,7 @@ const InStore = () => {
     }
 
     // Try to find product by SKU (barcode) or ID
-    const product = storeData.products.find(
+    const product = storeData.results.products.find(
       (p) => p.sku === decodedText || p.id === decodedText
     );
 
@@ -59,7 +82,6 @@ const InStore = () => {
         position: "top-center",
         autoClose: 2000,
       });
-      // setShowScanner(false);
     } else {
       toast.error(
         `Product with barcode "${decodedText}" not found. Please scan a valid product barcode.`,
@@ -117,7 +139,7 @@ const InStore = () => {
     <CartProvider>
       <div className="flex flex-col min-h-screen bg-gray-50 font-['Montserrat']">
         {/* Header */}
-        {isLoading ? (
+        {isLoading && !storeData ? (
           <HeaderSkeleton />
         ) : (
           <header className="bg-white shadow-md z-20 sticky top-0">
@@ -125,10 +147,10 @@ const InStore = () => {
               <div className="flex items-center justify-between h-20">
                 <div className="flex items-center space-x-3">
                   <div className="bg-gradient-to-br from-green-500 to-green-600 p-2 rounded-xl shadow-lg overflow-hidden">
-                    {storeData?.info.logo ? (
+                    {storeData?.results?.info.logo ? (
                       <img
-                        src={storeData.info.logo}
-                        alt={storeData.info.name}
+                        src={storeData.results.info.logo}
+                        alt={storeData.results.info.name}
                         className="w-8 h-8 object-cover rounded"
                         onError={(e) => {
                           const img = e.target as HTMLImageElement;
@@ -140,7 +162,7 @@ const InStore = () => {
                     ) : null}
                     <svg
                       className={`w-8 h-8 text-white ${
-                        storeData?.info.logo ? "hidden" : ""
+                        storeData?.results?.info.logo ? "hidden" : ""
                       }`}
                       fill="none"
                       stroke="currentColor"
@@ -156,10 +178,10 @@ const InStore = () => {
                   </div>
                   <div>
                     <p className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-green-600 to-green-500 bg-clip-text text-transparent">
-                      {storeData?.info.name || "Loading..."}
+                      {storeData?.results?.info.name || "Loading..."}
                     </p>
                     <p className="text-xs text-gray-600 hidden sm:block">
-                      {storeData?.info.state || ""}
+                      {storeData?.results?.info.state || ""}
                     </p>
                   </div>
                 </div>
@@ -170,43 +192,44 @@ const InStore = () => {
         )}
 
         {/* Hero Banner */}
-        {/* bg-gradient-to-r from-green-600 via-green-500 to-emerald-500 */}
-        <div className="relative  text-white overflow-hidden">
+        <div className="relative text-white overflow-hidden">
           <div className="absolute inset-0">
             <img
               src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80"
               alt="Shopping background"
-              className="w-full h-full object-cover "
+              className="w-full h-full object-cover"
             />
+            {/* Dark overlay for better text visibility */}
+            <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/50 to-black/60"></div>
           </div>
 
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-20">
             <div className="text-center">
-              <h1 className="text-3xl sm:text-5xl font-bold mb-4 drop-shadow-lg">
-                {isLoading
+              <h1 className="text-3xl sm:text-5xl font-bold mb-4 text-white drop-shadow-2xl [text-shadow:_0_2px_10px_rgb(0_0_0_/_80%)]">
+                {isLoading && !storeData
                   ? "Loading..."
-                  : storeData?.info.tag_line ||
-                    `Welcome to ${storeData?.info.name || "InStore"}`}
+                  : storeData?.results?.info.tag_line ||
+                    `Welcome to ${storeData?.results?.info.name || "InStore"}`}
               </h1>
-              <p className="text-lg sm:text-xl mb-6 text-green-50 max-w-2xl mx-auto">
-                {isLoading
+              <p className="text-lg sm:text-xl mb-6 text-white max-w-2xl mx-auto drop-shadow-lg [text-shadow:_0_1px_8px_rgb(0_0_0_/_70%)]">
+                {isLoading && !storeData
                   ? "Please wait..."
-                  : storeData?.info.description ||
+                  : storeData?.results?.info.description ||
                     "Scan products instantly with our barcode scanner. Quick, easy, and convenient shopping experience."}
               </p>
               <div className="flex flex-wrap justify-center gap-4">
-                <div className="bg-white bg-opacity-20 backdrop-blur-sm px-6 py-3 rounded-full">
-                  <p className="text-sm font-semibold text-black">
+                <div className="bg-white/90 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg">
+                  <p className="text-sm font-semibold text-gray-900">
                     📱 Instant Scanning
                   </p>
                 </div>
-                <div className="bg-white bg-opacity-20 backdrop-blur-sm px-6 py-3 rounded-full">
-                  <p className="text-sm font-semibold text-black">
+                <div className="bg-white/90 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg">
+                  <p className="text-sm font-semibold text-gray-900">
                     💯 Quality Assured
                   </p>
                 </div>
-                <div className="bg-white bg-opacity-20 backdrop-blur-sm px-6 py-3 rounded-full">
-                  <p className="text-sm font-semibold text-black">
+                <div className="bg-white/90 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg">
+                  <p className="text-sm font-semibold text-gray-900">
                     🔒 Secure Payment
                   </p>
                 </div>
@@ -219,10 +242,19 @@ const InStore = () => {
         <main className="flex-1 bg-gray-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <ProductList
-              products={storeData?.products || []}
-              categories={categories}
-              currency={storeData?.info.currency || "₦"}
+              products={storeData?.results?.products || []}
+              categories={storeData?.results?.categories || []}
+              currency={storeData?.results?.info.currency || "₦"}
               isLoading={isLoading}
+              selectedCategoryId={selectedCategoryId}
+              onCategoryChange={handleCategoryChange}
+              searchQuery={searchQuery}
+              onSearchChange={handleSearchChange}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+              hasMore={hasMore}
+              totalProducts={storeData?.total || 0}
             />
           </div>
         </main>
@@ -291,7 +323,7 @@ const InStore = () => {
           <ProductBottomDrawer
             product={scannedProduct}
             onClose={() => setScannedProduct(null)}
-            currency={storeData.info.currency}
+            currency={storeData.results.info.currency}
           />
         )}
 

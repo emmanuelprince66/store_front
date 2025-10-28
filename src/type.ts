@@ -48,10 +48,23 @@ export interface Product {
   variations?: ProductVariation[];
 }
 
-export interface StoreData {
+export interface StoreResults {
   info: StoreInfo;
   categories: Category[];
   products: Product[];
+}
+
+export interface PaginationLinks {
+  next: string | null;
+  previous: string | null;
+}
+
+export interface StoreData {
+  links: PaginationLinks;
+  total: number;
+  limit: number;
+  pages: number;
+  results: StoreResults;
 }
 
 export interface CartItem {
