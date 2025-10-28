@@ -40,6 +40,7 @@ export const ProductList = ({
   const categoriesContainerRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<number | null>(null);
 
+  // console.log("products", products);
   // Handle debounced search
   const handleSearchInput = (value: string) => {
     setLocalSearchTerm(value);
@@ -324,7 +325,7 @@ export const ProductList = ({
             {/* Categories Container */}
             <div
               ref={categoriesContainerRef}
-              className="flex gap-1 sm:gap-2 overflow-x-auto flex-1 py-1"
+              className="flex gap-1 sm:gap-2 justify-center mx-auto overflow-x-auto flex-1 py-1"
               style={{
                 scrollbarWidth: "none",
                 msOverflowStyle: "none",
@@ -405,7 +406,7 @@ export const ProductList = ({
       </div>
 
       {/* Products Grid */}
-      {isLoading ? (
+      {isLoading && Array.isArray(products) && products.length === 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {[...Array(8)].map((_, i) => (
             <ProductCardSkeleton key={i} />

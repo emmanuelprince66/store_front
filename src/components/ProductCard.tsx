@@ -68,7 +68,7 @@ export const ProductCard = ({
 
   const stockStatus = getStockStatus();
 
-  console.log("ProductCard rendered", product);
+  // console.log("ProductCard rendered", product);
 
   return (
     <>

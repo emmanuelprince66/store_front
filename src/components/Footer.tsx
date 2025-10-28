@@ -1,6 +1,7 @@
 export const Footer = ({ storeData }: { storeData: any }) => {
-  const storeName = storeData?.info?.name || "OutStore Premium";
-  const location = storeData?.info?.state;
+  // console.log("Store data:", storeData);
+  const storeName = storeData?.results?.info?.name || "OutStore Premium";
+  const location = storeData?.results?.info?.state;
 
   return (
     <footer className="bg-gray-900 text-gray-300 mt-auto">

@@ -154,7 +154,7 @@ export const OutStore = () => {
               className="w-full h-full object-cover"
             />
             {/* Dark overlay for better text visibility */}
-            <div className="absolute inset-0 bg-gradient-to-r from-green-900/70 via-green-800/60 to-green-900/70"></div>
+            <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/50 to-black/60"></div>
           </div>
 
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-20">
