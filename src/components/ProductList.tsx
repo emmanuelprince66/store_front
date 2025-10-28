@@ -31,7 +31,7 @@ export const ProductList = ({
   currentPage,
   totalPages,
   onPageChange,
-  hasMore,
+  // hasMore,
   totalProducts,
 }: ProductListProps) => {
   const [localSearchTerm, setLocalSearchTerm] = useState(searchQuery);
