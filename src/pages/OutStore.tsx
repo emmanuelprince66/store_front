@@ -101,7 +101,7 @@ export const OutStore = () => {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex items-center justify-between h-20">
                 <div className="flex items-center space-x-3">
-                  <div className="bg-gradient-to-br from-green-500 to-green-600 p-2 rounded-xl shadow-lg overflow-hidden">
+                  <div className="p-2 rounded-xl shadow-lg overflow-hidden">
                     {storeData?.results?.info.logo ? (
                       <img
                         src={storeData.results.info.logo}

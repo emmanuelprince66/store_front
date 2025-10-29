@@ -19,7 +19,6 @@ interface CustomerDetails {
   name: string;
   phone: string;
   address: string;
-  tableRoomNumber: string;
 }
 
 interface ShippingOption {
@@ -54,6 +53,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
   );
 
   const [note, setNote] = useState("");
+  const [tableRoomNumber, setTableRoomNumber] = useState("");
   const [couponCode, setCouponCode] = useState("");
 
   const shippingOptions: ShippingOption[] = [
@@ -136,7 +136,6 @@ export const Checkout: React.FC<CheckoutProps> = ({
     name: "",
     phone: "",
     address: "",
-    tableRoomNumber: "",
   };
 
   const currentAddressForm = editAddress || emptyAddress;
@@ -239,10 +238,6 @@ export const Checkout: React.FC<CheckoutProps> = ({
                       <p className="text-xs text-gray-600">
                         {customerDetails.address}
                       </p>
-                      <p className="text-xs text-gray-600 mt-1">
-                        <span className="font-medium">Table/Room:</span>{" "}
-                        {customerDetails.tableRoomNumber}
-                      </p>
                     </div>
                     <button
                       onClick={() => {
@@ -256,6 +251,19 @@ export const Checkout: React.FC<CheckoutProps> = ({
                   </div>
                 </div>
               )}
+
+              <div className="my-5">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Table/Room Number
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., Table 5 or Room 201"
+                  value={tableRoomNumber}
+                  onChange={(e) => setTableRoomNumber(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Note (Optional)
@@ -315,6 +323,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
                     </p>
                   </div>
                 )}
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Note (Optional)
@@ -544,21 +553,6 @@ export const Checkout: React.FC<CheckoutProps> = ({
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Table/Room Number *
-              </label>
-              <input
-                type="text"
-                placeholder="e.g., Table 5 or Room 201"
-                value={currentCustomerForm.tableRoomNumber}
-                onChange={(e) =>
-                  handleCustomerFormChange("tableRoomNumber", e.target.value)
-                }
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
             <div className="flex space-x-4 gap-3 pt-4">
               <button
                 type="button"
@@ -574,12 +568,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
                 type="button"
                 onClick={() => {
                   const details = { ...currentCustomerForm };
-                  if (
-                    !details.name ||
-                    !details.phone ||
-                    !details.address ||
-                    !details.tableRoomNumber
-                  ) {
+                  if (!details.name || !details.phone || !details.address) {
                     alert("Please fill in all required fields");
                     return;
                   }

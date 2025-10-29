@@ -7,9 +7,14 @@ import Html5QrcodePlugin from "./Html5QrcodePlugin";
 interface ScannerModalProps {
   onClose: () => void;
   onScanSuccess: (decodedText: string, decodedResult: any) => void;
+  isSearching?: boolean;
 }
 
-const ScannerModal = ({ onClose, onScanSuccess }: ScannerModalProps) => {
+const ScannerModal = ({
+  onClose,
+  onScanSuccess,
+  isSearching = false,
+}: ScannerModalProps) => {
   const { cart } = useContext(CartContext);
   const [isCameraReady, setIsCameraReady] = useState(false);
 
@@ -33,6 +38,7 @@ const ScannerModal = ({ onClose, onScanSuccess }: ScannerModalProps) => {
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              disabled={isSearching}
             >
               <svg
                 className="w-6 h-6 text-gray-600"
@@ -70,7 +76,7 @@ const ScannerModal = ({ onClose, onScanSuccess }: ScannerModalProps) => {
           </div>
 
           <div className="scanner-container rounded-xl overflow-hidden border-4 border-green-500 relative">
-            {/* Camera Loading Spinner - Shows in the scanner area */}
+            {/* Camera Loading Spinner */}
             {!isCameraReady && (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-30">
                 <div className="text-center">
@@ -93,6 +99,46 @@ const ScannerModal = ({ onClose, onScanSuccess }: ScannerModalProps) => {
               </div>
             )}
 
+            {/* Product Search Loading Overlay */}
+            {isSearching && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-40">
+                <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-sm mx-4">
+                  <div className="text-center">
+                    <div className="relative w-24 h-24 mx-auto mb-4">
+                      <div className="absolute inset-0 border-4 border-green-100 rounded-full"></div>
+                      <div className="absolute inset-0 border-4 border-transparent border-t-green-600 rounded-full animate-spin"></div>
+                      <div
+                        className="absolute inset-2 border-4 border-transparent border-t-green-400 rounded-full animate-spin"
+                        style={{
+                          animationDirection: "reverse",
+                          animationDuration: "0.8s",
+                        }}
+                      ></div>
+                      <svg
+                        className="absolute inset-0 m-auto w-10 h-10 text-green-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                        />
+                      </svg>
+                    </div>
+                    <p className="text-gray-900 font-bold text-xl mb-2">
+                      Searching Product
+                    </p>
+                    <p className="text-gray-600 text-sm">
+                      Looking up barcode in database...
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <Html5QrcodePlugin
               fps={10}
               qrbox={250}
@@ -100,15 +146,17 @@ const ScannerModal = ({ onClose, onScanSuccess }: ScannerModalProps) => {
               qrCodeSuccessCallback={onScanSuccess}
               qrCodeErrorCallback={handleScanError}
               onCameraReady={handleCameraReady}
+              isPaused={isSearching}
             />
           </div>
 
-          <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-            {/* <p className="text-sm text-blue-800 font-medium">
-              📋 Test Instructions: Enter product ID (1 or 2) in the scanner
-              input field
-            </p> */}
-          </div>
+          {isSearching && (
+            <div className="mt-4 p-4 bg-amber-50 rounded-lg border border-amber-200">
+              <p className="text-sm text-amber-800 font-medium text-center">
+                🔍 Processing barcode... Please hold steady
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

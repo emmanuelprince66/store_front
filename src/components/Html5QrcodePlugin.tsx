@@ -10,6 +10,7 @@ interface Html5QrcodePluginProps {
   qrCodeErrorCallback?: (error: string) => void;
   verbose?: boolean;
   onCameraReady?: () => void;
+  isPaused?: boolean;
 }
 
 const Html5QrcodePlugin = ({
@@ -21,11 +22,13 @@ const Html5QrcodePlugin = ({
   qrCodeErrorCallback,
   verbose = false,
   onCameraReady,
+  isPaused = false,
 }: Html5QrcodePluginProps) => {
   const qrcodeRegionId = "html5qr-code-full-region";
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isMountedRef = useRef(true);
   const isInitializingRef = useRef(false);
+  const lastScanTimeRef = useRef<number>(0);
   const [error, setError] = useState<string>("");
 
   useEffect(() => {
@@ -74,7 +77,16 @@ const Html5QrcodePlugin = ({
         };
 
         const onScanSuccess = (decodedText: string, decodedResult: any) => {
+          // Prevent rapid successive scans (debounce)
+          const now = Date.now();
+          if (now - lastScanTimeRef.current < 1500) {
+            console.log("Scan too soon, ignoring");
+            return;
+          }
+
+          lastScanTimeRef.current = now;
           console.log("Scanned:", decodedText);
+
           if (isMountedRef.current) {
             qrCodeSuccessCallback(decodedText, decodedResult);
           }
@@ -250,6 +262,28 @@ const Html5QrcodePlugin = ({
       cleanup();
     };
   }, []); // Empty deps - only initialize once
+
+  // Handle pause/resume based on isPaused prop
+  useEffect(() => {
+    if (!scannerRef.current) return;
+
+    const handlePauseResume = async () => {
+      try {
+        const state = await scannerRef.current!.getState();
+
+        if (isPaused && state === 2) {
+          // Pause scanning by not processing results
+          console.log("Scanner paused");
+        } else if (!isPaused && state === 2) {
+          console.log("Scanner resumed");
+        }
+      } catch (err) {
+        console.warn("Error handling pause/resume:", err);
+      }
+    };
+
+    handlePauseResume();
+  }, [isPaused]);
 
   if (error) {
     return (

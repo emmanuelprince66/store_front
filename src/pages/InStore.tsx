@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { BaseUrl } from "../base-url";
 import { HeaderSkeleton } from "../components/CardSkeleton";
 import CartIcon from "../components/CartIcon";
 import { Footer } from "../components/Footer";
@@ -25,6 +26,7 @@ const InStore = () => {
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [isSearchingBarcode, setIsSearchingBarcode] = useState(false);
 
   // Fetch store data with filters
   const {
@@ -33,9 +35,8 @@ const InStore = () => {
     error,
     hasMore,
     totalPages,
-    // fetchData,
   } = useFetchData<StoreData>({
-    store_url: "babspatsuperstore",
+    store_url: "cap&",
     category_id: selectedCategoryId,
     search: searchQuery,
     page: currentPage,
@@ -46,12 +47,12 @@ const InStore = () => {
 
   const handleCategoryChange = (categoryId: string | null) => {
     setSelectedCategoryId(categoryId);
-    setCurrentPage(1); // Reset to first page when category changes
+    setCurrentPage(1);
   };
 
   const handleSearchChange = (search: string) => {
     setSearchQuery(search);
-    setCurrentPage(1); // Reset to first page when search changes
+    setCurrentPage(1);
   };
 
   const handlePageChange = (page: number) => {
@@ -59,37 +60,86 @@ const InStore = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleScanSuccess = (decodedText: string, decodedResult: any) => {
+  const getStoreUrl = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramStoreUrl = urlParams.get("store_url");
+    return paramStoreUrl || "cap&";
+  };
+
+  const searchProductByBarcode = async (barcode: string) => {
+    const storeUrl = getStoreUrl();
+    const searchUrl = `${BaseUrl}/${storeUrl}?search=${encodeURIComponent(
+      barcode
+    )}&page=1&limit=1`;
+
+    console.log("Searching barcode:", barcode, "URL:", searchUrl);
+
+    try {
+      const response = await fetch(searchUrl, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.results?.products && data.results.products.length > 0) {
+        return data.results.products[0];
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Barcode search error:", error);
+      throw error;
+    }
+  };
+
+  const handleScanSuccess = async (decodedText: string, decodedResult: any) => {
     console.log("Scan success:", decodedText);
     console.log("Decoded result:", decodedResult);
 
-    if (!storeData?.results?.products) {
-      toast.warning("Products not loaded yet. Please try again.", {
-        position: "top-center",
-        autoClose: 3000,
-      });
+    // Prevent multiple searches
+    if (isSearchingBarcode) {
+      console.log("Already searching, ignoring scan");
       return;
     }
 
-    // Try to find product by SKU (barcode) or ID
-    const product = storeData.results.products.find(
-      (p) => p.sku === decodedText || p.id === decodedText
-    );
+    setIsSearchingBarcode(true);
 
-    if (product) {
-      setScannedProduct(product);
-      toast.success(`Found: ${product.name}`, {
-        position: "top-center",
-        autoClose: 2000,
-      });
-    } else {
-      toast.error(
-        `Product with barcode "${decodedText}" not found. Please scan a valid product barcode.`,
-        {
+    try {
+      const product = await searchProductByBarcode(decodedText);
+
+      if (product) {
+        setScannedProduct(product);
+        toast.success(`Found: ${product.name}`, {
           position: "top-center",
-          autoClose: 4000,
-        }
-      );
+          autoClose: 2000,
+        });
+      } else {
+        toast.error(
+          `No product found for barcode "${decodedText}". Please try another barcode.`,
+          {
+            position: "top-center",
+            autoClose: 4000,
+          }
+        );
+      }
+    } catch (error) {
+      toast.error("Failed to search for product. Please try again.", {
+        position: "top-center",
+        autoClose: 3000,
+      });
+    } finally {
+      // Allow new scans after a short delay
+      setTimeout(() => {
+        setIsSearchingBarcode(false);
+      }, 1500);
     }
   };
 
@@ -146,7 +196,7 @@ const InStore = () => {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex items-center justify-between h-20">
                 <div className="flex items-center space-x-3">
-                  <div className="bg-gradient-to-br from-green-500 to-green-600 p-2 rounded-xl shadow-lg overflow-hidden">
+                  <div className="p-2 rounded-xl shadow-lg overflow-hidden">
                     {storeData?.results?.info.logo ? (
                       <img
                         src={storeData.results.info.logo}
@@ -199,7 +249,6 @@ const InStore = () => {
               alt="Shopping background"
               className="w-full h-full object-cover"
             />
-            {/* Dark overlay for better text visibility */}
             <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/50 to-black/60"></div>
           </div>
 
@@ -264,6 +313,7 @@ const InStore = () => {
           <ScannerModal
             onClose={() => setShowScanner(false)}
             onScanSuccess={handleScanSuccess}
+            isSearching={isSearchingBarcode}
           />
         )}
 
@@ -274,10 +324,8 @@ const InStore = () => {
             className="fixed bottom-6 right-6 z-30 group"
             aria-label="Scan product barcode"
           >
-            {/* Pulsing ring animation */}
             <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75 animate-ping"></span>
 
-            {/* Main button */}
             <div className="relative cursor-pointer bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-4 rounded-full shadow-2xl hover:shadow-3xl hover:scale-110 transition-all transform active:scale-95 flex items-center gap-3">
               <svg
                 className="w-8 h-8"
@@ -297,7 +345,6 @@ const InStore = () => {
               </span>
             </div>
 
-            {/* Tooltip */}
             <div className="absolute bottom-full right-0 mb-2 px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
               Scan Product Barcode
               <div className="absolute top-full right-8 w-0 h-0 border-l-8 border-r-8 border-t-8 border-transparent border-t-gray-900"></div>
