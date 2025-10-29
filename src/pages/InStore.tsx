@@ -36,7 +36,7 @@ const InStore = () => {
     hasMore,
     totalPages,
   } = useFetchData<StoreData>({
-    store_url: "cap&",
+    store_url: "babspatsuperstore",
     category_id: selectedCategoryId,
     search: searchQuery,
     page: currentPage,
@@ -63,7 +63,7 @@ const InStore = () => {
   const getStoreUrl = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const paramStoreUrl = urlParams.get("store_url");
-    return paramStoreUrl || "cap&";
+    return paramStoreUrl || "babspatsuperstore";
   };
 
   const searchProductByBarcode = async (barcode: string) => {
