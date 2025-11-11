@@ -10,6 +10,7 @@ export interface StoreInfo {
   state: string;
   tag_line: string | null;
   type: string;
+  id: string;
 }
 
 export interface Category {
@@ -47,11 +48,19 @@ export interface Product {
   type: string;
   variations?: ProductVariation[];
 }
+export interface Shipping {
+  id: string;
+  amount: string;
+  description: string;
+  location: string;
+  visible: boolean;
+}
 
 export interface StoreResults {
   info: StoreInfo;
   categories: Category[];
   products: Product[];
+  shipping: Shipping[];
 }
 
 export interface PaginationLinks {

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import { HeaderSkeleton } from "../components/CardSkeleton";
 import CartIcon from "../components/CartIcon";
 import { Footer } from "../components/Footer";
@@ -15,6 +16,10 @@ export const OutStore = () => {
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const location = useLocation();
+  const slug = location.search.substring(6) || "";
+
+  console.log("Slug:", slug);
 
   // Fetch store data with filters
   const {
@@ -25,14 +30,14 @@ export const OutStore = () => {
     totalPages,
     // fetchData,
   } = useFetchData<StoreData>({
-    store_url: "cap&",
+    store_url: slug,
     category_id: selectedCategoryId,
     search: searchQuery,
     page: currentPage,
     limit: 20,
   });
 
-  // console.log("Store data:", storeData);
+  console.log("Store data:", storeData);
 
   const handleCategoryChange = (categoryId: string | null) => {
     setSelectedCategoryId(categoryId);
@@ -85,7 +90,11 @@ export const OutStore = () => {
     return (
       <CartProvider>
         <div className="min-h-screen bg-gray-50 font-['Montserrat']">
-          <Checkout type={"out-store"} onBack={() => setCurrentView("store")} />
+          <Checkout
+            storeData={storeData}
+            type={"out-store"}
+            onBack={() => setCurrentView("store")}
+          />
         </div>
       </CartProvider>
     );

@@ -325,7 +325,7 @@ export const ProductList = ({
             {/* Categories Container */}
             <div
               ref={categoriesContainerRef}
-              className="flex gap-1 sm:gap-2 justify-center mx-auto overflow-x-auto flex-1 py-1"
+              className="flex gap-1 sm:gap-2 overflow-x-auto flex-1 py-1"
               style={{
                 scrollbarWidth: "none",
                 msOverflowStyle: "none",

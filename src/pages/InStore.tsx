@@ -3,6 +3,7 @@
 // ============================================
 
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { BaseUrl } from "../base-url";
@@ -24,6 +25,10 @@ const InStore = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null
   );
+  const location = useLocation();
+  const slug = location.search.substring(6) || "";
+
+  console.log("Slug:", slug);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [isSearchingBarcode, setIsSearchingBarcode] = useState(false);
@@ -36,7 +41,7 @@ const InStore = () => {
     hasMore,
     totalPages,
   } = useFetchData<StoreData>({
-    store_url: "banvicelectronics",
+    store_url: slug,
     category_id: selectedCategoryId,
     search: searchQuery,
     page: currentPage,
@@ -147,7 +152,11 @@ const InStore = () => {
     return (
       <CartProvider>
         <div className="min-h-screen bg-gray-50 font-['Montserrat']">
-          <Checkout type={"in-store"} onBack={() => setCurrentView("store")} />
+          <Checkout
+            storeData={storeData}
+            type={"in-store"}
+            onBack={() => setCurrentView("store")}
+          />
         </div>
       </CartProvider>
     );
@@ -197,10 +206,10 @@ const InStore = () => {
               <div className="flex items-center justify-between h-20">
                 <div className="flex items-center space-x-3">
                   <div className="p-2 rounded-xl shadow-lg overflow-hidden">
-                    {storeData?.results?.info.logo ? (
+                    {storeData?.results?.info?.logo ? (
                       <img
-                        src={storeData.results.info.logo}
-                        alt={storeData.results.info.name}
+                        src={storeData.results?.info?.logo}
+                        alt={storeData.results?.info?.name}
                         className="w-8 h-8 object-cover rounded"
                         onError={(e) => {
                           const img = e.target as HTMLImageElement;
@@ -212,7 +221,7 @@ const InStore = () => {
                     ) : null}
                     <svg
                       className={`w-8 h-8 text-white ${
-                        storeData?.results?.info.logo ? "hidden" : ""
+                        storeData?.results?.info?.logo ? "hidden" : ""
                       }`}
                       fill="none"
                       stroke="currentColor"
@@ -228,10 +237,10 @@ const InStore = () => {
                   </div>
                   <div>
                     <p className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-green-600 to-green-500 bg-clip-text text-transparent">
-                      {storeData?.results?.info.name || "Loading..."}
+                      {storeData?.results?.info?.name || "Loading..."}
                     </p>
                     <p className="text-xs text-gray-600 hidden sm:block">
-                      {storeData?.results?.info.state || ""}
+                      {storeData?.results?.info?.state || ""}
                     </p>
                   </div>
                 </div>
