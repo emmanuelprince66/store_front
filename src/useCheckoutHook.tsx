@@ -73,8 +73,8 @@ interface UseCheckoutHookProps {
 export const useCheckoutHook = ({
   type = "out-store",
   storeData,
-  onBack,
-}: UseCheckoutHookProps) => {
+}: // onBack,
+UseCheckoutHookProps) => {
   const { cart, getTotalPrice, updateQuantity, clearCart } =
     useContext(CartContext);
   const subtotal = getTotalPrice();
