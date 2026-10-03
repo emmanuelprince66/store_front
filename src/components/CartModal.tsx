@@ -1,5 +1,6 @@
 import { useContext } from "react";
 import { CartContext } from "../context/CartContext";
+import { getPrimaryImage } from "../utils/media";
 
 interface CartModalProps {
   onClose: () => void;
@@ -17,10 +18,10 @@ const CartModal = ({ onClose, onCheckout }: CartModalProps) => {
 
   if (cart.length === 0) {
     return (
-      <div className="p-6 sm:p-8 text-center flex w-full flex-col items-center">
-        <div className="mb-4">
+      <div className="p-8 sm:p-12 text-center bg-white rounded-2xl flex flex-col items-center">
+        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-[#f0f0f0] flex items-center justify-center mb-5">
           <svg
-            className="w-20 h-20 sm:w-24 sm:h-24 text-gray-300 mx-auto"
+            className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -28,20 +29,20 @@ const CartModal = ({ onClose, onCheckout }: CartModalProps) => {
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
-              strokeWidth="2"
-              d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.5 1.5M7 13l1.5 1.5"
+              strokeWidth="1.5"
+              d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
             />
           </svg>
         </div>
-        <h3 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2">
+        <h3 className="font-display text-2xl sm:text-3xl text-black uppercase tracking-wide mb-2">
           Your cart is empty
         </h3>
-        <p className="text-sm sm:text-base text-gray-600 mb-6">
+        <p className="text-sm text-gray-500 mb-6">
           Add some products to get started
         </p>
         <button
           onClick={onClose}
-          className="bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 transition-colors cursor-pointer font-medium w-full sm:w-auto"
+          className="bg-black text-white px-8 py-3 rounded-full hover:bg-gray-800 transition-colors font-medium text-sm"
         >
           Continue Shopping
         </button>
@@ -49,94 +50,83 @@ const CartModal = ({ onClose, onCheckout }: CartModalProps) => {
     );
   }
 
+  const subtotal = getTotalPrice();
+  const total = subtotal;
+
   return (
-    <div className="w-full flex flex-col h-full">
-      <div className="p-4 sm:p-6 border-b border-gray-200 flex-shrink-0">
+    <div className="w-full flex flex-col h-full bg-white rounded-2xl overflow-hidden max-h-[90vh]">
+      {/* Header */}
+      <div className="px-5 sm:px-6 py-4 sm:py-5 border-b border-gray-200 flex-shrink-0">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg sm:text-xl font-bold text-gray-900">
-            Shopping Cart
+          <h2 className="font-display text-2xl sm:text-3xl text-[var(--brand-primary)] uppercase tracking-wide">
+            Your Cart
           </h2>
-          <span className="text-xs sm:text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+          <span className="text-xs sm:text-sm text-gray-500 bg-[#f0f0f0] px-3 py-1 rounded-full">
             {getTotalItems()} {getTotalItems() === 1 ? "item" : "items"}
           </span>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        {cart.map((item) => (
-          <div
-            key={item.product.id}
-            className="p-4 sm:p-6 border-b border-gray-200 hover:bg-gray-50 transition-colors"
-          >
-            <div className="flex items-start sm:items-center gap-3 sm:gap-4">
-              <img
-                src={item.product.image}
-                alt={item.product.name}
-                className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-lg flex-shrink-0 shadow-sm"
-              />
+      {/* Items */}
+      <div className="flex-1 overflow-y-auto px-5 sm:px-6">
+        {cart.map((item, index) => {
+          const itemPrice =
+            item.variation?.selling_price || item.product.selling_price || 0;
+          const isCombo = item.product.type === "COMBO";
+          const maxQuantity =
+            item.variation?.quantity ||
+            item.product.quantity ||
+            (isCombo ? 99 : 0);
+          const itemStatus = item.variation?.status || item.product.status;
+
+          const cartItemKey = item.variation
+            ? `${item.product.id}-${item.variation.id}`
+            : item.product.id;
+
+          return (
+            <div
+              key={cartItemKey}
+              className={`py-4 flex items-start gap-3 sm:gap-4 ${
+                index !== cart.length - 1 ? "border-b border-gray-100" : ""
+              }`}
+            >
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl bg-[#f0f0f0] flex-shrink-0 overflow-hidden">
+                {getPrimaryImage(item.product) ? (
+                  <img
+                    src={getPrimaryImage(item.product)}
+                    alt={item.product.name}
+                    loading="lazy"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <svg
+                      className="w-8 h-8 text-gray-300"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="1.5"
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
+                    </svg>
+                  </div>
+                )}
+              </div>
 
               <div className="flex-1 min-w-0">
-                <h4 className="font-semibold text-gray-900 text-sm sm:text-base mb-1 line-clamp-2">
-                  {item.product.name}
-                </h4>
-                <p className="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3">
-                  ₦{item?.product?.selling_price?.toFixed(2)} each
-                </p>
-
-                <div className="flex items-center justify-between sm:justify-start gap-4">
-                  <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
-                    <button
-                      onClick={() =>
-                        updateQuantity(item.product.id, item.quantity - 1)
-                      }
-                      className="w-7 h-7 sm:w-8 sm:h-8 bg-white hover:bg-gray-200 rounded-md flex items-center justify-center cursor-pointer transition-colors shadow-sm"
-                      aria-label="Decrease quantity"
-                    >
-                      <svg
-                        className="w-3 h-3 sm:w-4 sm:h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M20 12H4"
-                        />
-                      </svg>
-                    </button>
-
-                    <span className="w-8 sm:w-10 text-center font-semibold text-sm sm:text-base">
-                      {item.quantity}
-                    </span>
-
-                    <button
-                      onClick={() =>
-                        updateQuantity(item.product.id, item.quantity + 1)
-                      }
-                      className="w-7 h-7 sm:w-8 sm:h-8 bg-white hover:bg-gray-200 rounded-md flex items-center justify-center cursor-pointer transition-colors shadow-sm"
-                      aria-label="Increase quantity"
-                    >
-                      <svg
-                        className="w-3 h-3 sm:w-4 sm:h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M12 4v16m8-8H4"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <h4 className="font-bold text-black text-sm sm:text-base line-clamp-2 flex-1">
+                    {item.product.name}
+                  </h4>
                   <button
-                    onClick={() => removeFromCart(item.product.id)}
-                    className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg cursor-pointer transition-colors"
+                    onClick={() =>
+                      removeFromCart(item.product.id, item.variation?.id)
+                    }
+                    className="text-[#FF3333] hover:text-red-700 transition-colors p-1 -mt-1 -mr-1 flex-shrink-0"
                     aria-label="Remove item"
                   >
                     <svg
@@ -154,44 +144,108 @@ const CartModal = ({ onClose, onCheckout }: CartModalProps) => {
                     </svg>
                   </button>
                 </div>
+
+                {item.variation && (
+                  <p className="text-xs text-gray-500 mb-1">
+                    Option:{" "}
+                    <span className="text-black">{item.variation.name}</span>
+                  </p>
+                )}
+
+                {itemStatus === "LOW" && (
+                  <p className="text-[11px] text-amber-600 mb-2">
+                    {isCombo ? "Low stock" : `Only ${maxQuantity} left`}
+                  </p>
+                )}
+
+                <div className="flex items-center justify-between mt-2">
+                  <span className="font-bold text-[var(--brand-primary)] text-base sm:text-lg">
+                    ₦{(itemPrice * item.quantity).toFixed(2)}
+                  </span>
+
+                  <div className="flex items-center bg-[#f0f0f0] rounded-full">
+                    <button
+                      onClick={() =>
+                        updateQuantity(
+                          item.product.id,
+                          item.quantity - 1,
+                          item.variation?.id,
+                        )
+                      }
+                      className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-black hover:bg-white rounded-full transition-colors"
+                      aria-label="Decrease quantity"
+                    >
+                      −
+                    </button>
+                    <span className="w-7 sm:w-8 text-center text-xs sm:text-sm font-semibold text-black">
+                      {item.quantity}
+                    </span>
+                    <button
+                      onClick={() =>
+                        updateQuantity(
+                          item.product.id,
+                          item.quantity + 1,
+                          item.variation?.id,
+                        )
+                      }
+                      disabled={item.quantity >= maxQuantity}
+                      className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-black hover:bg-white rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      aria-label="Increase quantity"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-
-            <div className="mt-3 sm:hidden flex items-center justify-between pt-3 border-t border-gray-100">
-              <span className="text-xs text-gray-500">Subtotal:</span>
-              <span className="font-semibold text-gray-900">
-                ₦
-                {((item.product?.selling_price ?? 0) * item.quantity).toFixed(
-                  2
-                )}
-              </span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      <div className="p-4 sm:p-6 border-t bg-gradient-to-b from-gray-50 to-white flex-shrink-0">
-        <div className="flex items-center justify-between mb-4 sm:mb-6">
-          <span className="text-base sm:text-lg font-semibold text-gray-700">
-            Total:
-          </span>
-          <span className="text-xl sm:text-2xl font-bold text-green-600">
-            ₦{getTotalPrice().toFixed(2)}
-          </span>
+      {/* Order Summary */}
+      <div className="px-5 sm:px-6 pt-4 pb-5 sm:pb-6 border-t border-gray-200 bg-white flex-shrink-0">
+        <h3 className="font-bold text-[var(--brand-primary)] mb-3 text-sm">Order Summary</h3>
+
+        <div className="space-y-2 mb-4 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-500">Subtotal</span>
+            <span className="font-semibold text-black">
+              ₦{subtotal.toFixed(2)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+            <span className="font-bold text-black">Total</span>
+            <span className="font-bold text-[var(--brand-primary)] text-lg sm:text-xl">
+              ₦{total.toFixed(2)}
+            </span>
+          </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col-reverse sm:flex-row gap-3">
           <button
             onClick={onClose}
-            className="flex-1 bg-gray-200 text-gray-800 py-3 sm:py-3.5 rounded-lg hover:bg-gray-300 transition-colors cursor-pointer font-semibold text-sm sm:text-base order-2 sm:order-1"
+            className="flex-1 bg-[#f0f0f0] text-black py-3 sm:py-3.5 rounded-full hover:bg-gray-200 transition-colors font-medium text-sm"
           >
             Continue Shopping
           </button>
           <button
             onClick={handleCheckout}
-            className="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white py-3 sm:py-3.5 rounded-lg hover:from-green-600 hover:to-green-700 transition-all cursor-pointer font-semibold shadow-lg hover:shadow-xl text-sm sm:text-base order-1 sm:order-2"
+            className="flex-1 bg-[var(--brand-primary)] text-[var(--brand-on-primary)] py-3 sm:py-3.5 rounded-full hover:opacity-90 transition-colors font-medium text-sm flex items-center justify-center gap-2"
           >
-            Proceed to Checkout
+            Go to Checkout
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M17 8l4 4m0 0l-4 4m4-4H3"
+              />
+            </svg>
           </button>
         </div>
       </div>

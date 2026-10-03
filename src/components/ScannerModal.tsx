@@ -1,6 +1,6 @@
 // File: src/components/ScannerModal.tsx
 
-import { useContext, useState } from "react";
+import { useContext, useMemo, useState } from "react";
 import { CartContext } from "../context/CartContext";
 import Html5QrcodePlugin from "./Html5QrcodePlugin";
 
@@ -20,6 +20,24 @@ const ScannerModal = ({
 
   console.log("Current cart:", cart);
 
+  // Calculate cart total and discount
+  const cartSummary = useMemo(() => {
+    let total = 0;
+    let totalDiscount = 0;
+
+    cart.forEach((item) => {
+      const itemPrice = item?.product?.selling_price! * item?.quantity;
+      const itemDiscountAmount = item.product.discount
+        ? (itemPrice * item.product.discount) / 100
+        : 0;
+
+      total += itemPrice - itemDiscountAmount;
+      totalDiscount += itemDiscountAmount;
+    });
+
+    return { total, discount: totalDiscount };
+  }, [cart]);
+
   const handleScanError = (error: string) => {
     // Silent error handling to avoid console spam
     console.warn("Scan error:", error);
@@ -27,6 +45,15 @@ const ScannerModal = ({
 
   const handleCameraReady = () => {
     setIsCameraReady(true);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-NG", {
+      style: "currency",
+      currency: "NGN",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
   };
 
   return (
@@ -56,15 +83,28 @@ const ScannerModal = ({
             </button>
           </div>
 
+          {/* Simple Cart Summary */}
           <div className="bg-white/95 backdrop-blur-md rounded-lg px-6 py-4 shadow-lg mb-4 border border-gray-200">
-            <div className="flex items-center justify-center gap-4">
+            <div className="flex items-center justify-between gap-4">
               <div className="text-center">
                 <p className="text-sm text-gray-600 font-medium">
                   Items in Cart
                 </p>
-                <p className="text-3xl font-bold text-green-600">
+                <p className="text-3xl font-bold text-[var(--brand-primary)]">
                   {cart.length}
                 </p>
+              </div>
+              <div className="h-12 w-px bg-gray-300"></div>
+              <div className="text-center">
+                <p className="text-sm text-gray-600 font-medium">Total</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {formatCurrency(cartSummary.total)}
+                </p>
+                {cartSummary.discount > 0 && (
+                  <p className="text-xs text-black font-medium mt-1">
+                    Saved {formatCurrency(cartSummary.discount)}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -75,16 +115,16 @@ const ScannerModal = ({
             </p>
           </div>
 
-          <div className="scanner-container rounded-xl overflow-hidden border-4 border-green-500 relative">
+          <div className="scanner-container rounded-xl overflow-hidden border-4 border-[var(--brand-primary)] relative">
             {/* Camera Loading Spinner */}
             {!isCameraReady && (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-30">
                 <div className="text-center">
                   <div className="relative w-20 h-20 mx-auto mb-4">
-                    <div className="absolute inset-0 border-4 border-green-100 rounded-full"></div>
-                    <div className="absolute inset-0 border-4 border-transparent border-t-green-600 rounded-full animate-spin"></div>
+                    <div className="absolute inset-0 border-4 border-gray-200 rounded-full"></div>
+                    <div className="absolute inset-0 border-4 border-transparent border-t-black rounded-full animate-spin"></div>
                     <div
-                      className="absolute inset-2 border-4 border-transparent border-t-green-400 rounded-full animate-spin"
+                      className="absolute inset-2 border-4 border-transparent border-t-gray-400 rounded-full animate-spin"
                       style={{
                         animationDirection: "reverse",
                         animationDuration: "1s",
@@ -105,17 +145,17 @@ const ScannerModal = ({
                 <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-sm mx-4">
                   <div className="text-center">
                     <div className="relative w-24 h-24 mx-auto mb-4">
-                      <div className="absolute inset-0 border-4 border-green-100 rounded-full"></div>
-                      <div className="absolute inset-0 border-4 border-transparent border-t-green-600 rounded-full animate-spin"></div>
+                      <div className="absolute inset-0 border-4 border-gray-200 rounded-full"></div>
+                      <div className="absolute inset-0 border-4 border-transparent border-t-black rounded-full animate-spin"></div>
                       <div
-                        className="absolute inset-2 border-4 border-transparent border-t-green-400 rounded-full animate-spin"
+                        className="absolute inset-2 border-4 border-transparent border-t-gray-400 rounded-full animate-spin"
                         style={{
                           animationDirection: "reverse",
                           animationDuration: "0.8s",
                         }}
                       ></div>
                       <svg
-                        className="absolute inset-0 m-auto w-10 h-10 text-green-600"
+                        className="absolute inset-0 m-auto w-10 h-10 text-black"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"

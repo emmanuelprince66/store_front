@@ -5,7 +5,7 @@
 import { useContext, useState } from "react";
 import { CartContext } from "../context/CartContext";
 import type { Product, ProductVariation } from "../type";
-import { ProductImageWithPlaceholder } from "./ImagePlaceHolder";
+import { ProductGallery } from "./ProductGallery";
 
 interface ProductBottomDrawerProps {
   product: Product;
@@ -30,9 +30,12 @@ const ProductBottomDrawer = ({
       (!hasVariations || item.variation?.id === selectedVariation?.id)
   );
 
+  const isCombo = product.type === "COMBO";
+
   const displayPrice =
     selectedVariation?.selling_price || product.selling_price || 0;
-  const displayQuantity = selectedVariation?.quantity || product.quantity || 0;
+  const displayQuantity =
+    selectedVariation?.quantity || product.quantity || (isCombo ? 99 : 0);
   const isInStock = selectedVariation
     ? selectedVariation.status === "IN-STOCK"
     : product.status === "IN-STOCK";
@@ -78,15 +81,12 @@ const ProductBottomDrawer = ({
             </svg>
           </button>
 
-          {/* Product Image */}
-          <div className="relative bg-gray-100">
-            <ProductImageWithPlaceholder
-              product={product}
-              className="w-full h-64 object-cover"
-            />
+          {/* Product Media */}
+          <div className="relative px-4 pt-2">
+            <ProductGallery product={product} variant="compact" />
 
             {/* Category Badge */}
-            <div className="absolute top-4 left-4">
+            <div className="pointer-events-none absolute top-4 left-6 z-10">
               <span className="bg-white bg-opacity-90 text-gray-800 text-sm font-semibold px-4 py-2 rounded-full shadow-lg capitalize">
                 {product.category}
               </span>
@@ -101,16 +101,16 @@ const ProductBottomDrawer = ({
                 {product.name}
               </h2>
               <div className="flex items-center justify-between">
-                <p className="text-sm font-bold text-green-600">
+                <p className="text-sm font-bold text-[var(--brand-primary)]">
                   {currency}
                   {displayPrice.toFixed(2)}
                 </p>
                 <div className="flex items-center">
                   {isInStock ? (
                     <>
-                      <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-                      <span className="text-green-700 font-semibold">
-                        In Stock ({displayQuantity})
+                      <div className="w-3 h-3 bg-black rounded-full mr-2"></div>
+                      <span className="text-black font-semibold">
+                        {isCombo ? "In Stock" : `In Stock (${displayQuantity})`}
                       </span>
                     </>
                   ) : (
@@ -139,7 +139,7 @@ const ProductBottomDrawer = ({
                       disabled={variation.status !== "IN-STOCK"}
                       className={`p-4 rounded-lg border-2 font-medium transition-all text-left ${
                         selectedVariation?.id === variation.id
-                          ? "border-green-500 bg-green-50 text-green-900"
+                          ? "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-[var(--brand-on-primary)]"
                           : variation.status === "IN-STOCK"
                           ? "border-gray-300 bg-white text-gray-800 hover:border-gray-400"
                           : "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
@@ -203,10 +203,10 @@ const ProductBottomDrawer = ({
               disabled={
                 !isInStock || isInCart || (hasVariations && !selectedVariation)
               }
-              className={`w-full py-4 px-6 rounded-xl font-bold text-lg transition-all ${
+              className={`w-full py-3.5 px-6 rounded-full font-medium text-base transition-all ${
                 !isInStock || isInCart || (hasVariations && !selectedVariation)
                   ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                  : "bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 hover:shadow-xl"
+                  : "bg-[var(--brand-primary)] text-[var(--brand-on-primary)] hover:opacity-90"
               }`}
             >
               {!isInStock ? (

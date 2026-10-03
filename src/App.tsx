@@ -4,23 +4,27 @@ import { ToastContainer } from "react-toastify";
 import Success from "./components/Success";
 import { CartProvider } from "./context/CartContext";
 import InStore from "./pages/InStore";
-import { OutStore } from "./pages/OutStore";
+import { OutStore } from "./pages/Outstore";
+import ProductPage from "./pages/ProductPage";
 
 function App() {
   return (
     <CartProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/in-store" element={<InStore />} />
-          <Route path="/out-store" element={<OutStore />} />
+          <Route path="/i/:slug" element={<InStore />} />
+          <Route path="/o/:slug" element={<OutStore />} />
           <Route
-            path="/out-store/success"
-            element={<Success path={"/out-store"} />}
+            path="/i/:slug/product/:productId"
+            element={<ProductPage type="in-store" />}
           />
           <Route
-            path="/in-store/success"
-            element={<Success path={"/in-store"} />}
+            path="/o/:slug/product/:productId"
+            element={<ProductPage type="out-store" />}
           />
+          {/* Fixed: moved success routes to match the actual navigation */}
+          <Route path="/o/success/:slug" element={<Success path={"/o"} />} />
+          <Route path="/i/success/:slug" element={<Success path={"/i"} />} />
           <Route
             path="*"
             element={<div className="text-center mt-10">Not Found</div>}

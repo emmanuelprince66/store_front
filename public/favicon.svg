@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#111111"/>
+  <!-- Awning, with a scalloped lower edge -->
+  <path d="M13 15h38l5 13H8z" fill="#ffffff"/>
+  <path d="M8 28a6 6 0 0 0 12 0a6 6 0 0 0 12 0a6 6 0 0 0 12 0a6 6 0 0 0 12 0z" fill="#ffffff"/>
+  <path d="M24.5 15h4.5l-1 13h-5.5zM35 15h4.5l2 13H36z" fill="#111111"/>
+  <!-- Shop front and door -->
+  <path d="M13 37v14h38V37" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="27" y="40" width="10" height="11" rx="1.5" fill="#ffffff"/>
+</svg>

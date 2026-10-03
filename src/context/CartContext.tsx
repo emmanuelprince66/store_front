@@ -6,13 +6,13 @@ interface CartContextType {
   addToCart: (
     product: Product,
     quantity: number,
-    variation?: ProductVariation
+    variation?: ProductVariation,
   ) => void;
   removeFromCart: (productId: string, variationId?: string) => void;
   updateQuantity: (
     productId: string,
     quantity: number,
-    variationId?: string
+    variationId?: string,
   ) => void;
   getTotalItems: () => number;
   getTotalPrice: () => number;
@@ -37,44 +37,74 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   const addToCart = (
     product: Product,
     quantity: number,
-    variation?: ProductVariation
+    variation?: ProductVariation,
   ) => {
     setCart((prev) => {
-      const existingIndex = prev.findIndex(
-        (item) =>
-          item.product.id === product.id && item.variation?.id === variation?.id
-      );
+      // Check if this exact product + variation combo exists
+      const existingIndex = prev.findIndex((item) => {
+        if (variation) {
+          // For products with variations, match by variation ID
+          return item.variation?.id === variation.id;
+        } else {
+          // For simple products, match by product ID and ensure no variation
+          return item.product.id === product.id && !item.variation;
+        }
+      });
 
       if (existingIndex !== -1) {
+        // Update quantity of existing item
         const updated = [...prev];
-        updated[existingIndex].quantity += quantity;
+        const maxQuantity = variation?.quantity || product.quantity || 999;
+        updated[existingIndex].quantity = Math.min(
+          updated[existingIndex].quantity + quantity,
+          maxQuantity,
+        );
         return updated;
       }
 
+      // Add new item to cart
       return [...prev, { product, variation, quantity }];
     });
   };
 
   const removeFromCart = (productId: string, variationId?: string) => {
     setCart((prev) =>
-      prev.filter(
-        (item) =>
-          !(item.product.id === productId && item.variation?.id === variationId)
-      )
+      prev.filter((item) => {
+        if (variationId) {
+          // Remove by variation ID
+          return item.variation?.id !== variationId;
+        } else {
+          // Remove by product ID (for simple products)
+          return !(item.product.id === productId && !item.variation);
+        }
+      }),
     );
   };
 
   const updateQuantity = (
     productId: string,
     quantity: number,
-    variationId?: string
+    variationId?: string,
   ) => {
+    if (quantity < 1) {
+      removeFromCart(productId, variationId);
+      return;
+    }
+
     setCart((prev) =>
-      prev.map((item) =>
-        item.product.id === productId && item.variation?.id === variationId
-          ? { ...item, quantity: Math.max(1, quantity) }
-          : item
-      )
+      prev.map((item) => {
+        // Match by variation ID if provided, otherwise by product ID
+        const isMatch = variationId
+          ? item.variation?.id === variationId
+          : item.product.id === productId && !item.variation;
+
+        if (isMatch) {
+          const maxQuantity =
+            item.variation?.quantity || item.product.quantity || 999;
+          return { ...item, quantity: Math.min(quantity, maxQuantity) };
+        }
+        return item;
+      }),
     );
   };
 
