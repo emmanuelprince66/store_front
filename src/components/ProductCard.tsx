@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { CartContext } from "../context/CartContext";
 import type { Product } from "../type";
 import { countMedia, getPrimaryImage } from "../utils/media";
+import { getStorefrontPath, type StorefrontType } from "../utils/storefront";
 import { ProductImageWithPlaceholder } from "./ImagePlaceHolder";
 
 export const ProductCard = ({
@@ -16,10 +17,15 @@ export const ProductCard = ({
   const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
   const location = useLocation();
-  const base = location.pathname.startsWith("/o") ? "/o" : "/i";
+  const type: StorefrontType =
+    location.pathname.startsWith("/o") || location.pathname.startsWith("/out")
+      ? "out-store"
+      : "in-store";
 
   const openProduct = () =>
-    navigate(`${base}/${slug}/product/${product.id}`, { state: { product } });
+    navigate(`${getStorefrontPath(type, slug)}/product/${product.id}`, {
+      state: { product },
+    });
 
   const hasVariations = product.variations && product.variations.length > 0;
 

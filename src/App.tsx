@@ -12,6 +12,24 @@ function App() {
     <CartProvider>
       <BrowserRouter>
         <Routes>
+          <Route path="/in" element={<InStore />} />
+          <Route path="/out" element={<OutStore />} />
+          <Route
+            path="/in/product/:productId"
+            element={<ProductPage type="in-store" />}
+          />
+          <Route
+            path="/out/product/:productId"
+            element={<ProductPage type="out-store" />}
+          />
+          <Route
+            path="/in/success"
+            element={<Success path="/in" />}
+          />
+          <Route
+            path="/out/success"
+            element={<Success path="/out" />}
+          />
           <Route path="/i/:slug" element={<InStore />} />
           <Route path="/o/:slug" element={<OutStore />} />
           <Route

@@ -4,19 +4,26 @@ import type { OrderSummary } from "../useCheckoutHook";
 import type { StoreData } from "../type";
 import useFetchData from "../useFetchDataHook";
 import { useStoreTheme } from "../utils/theme";
+import { getCustomStoreDomain } from "../utils/storefront";
 
 const Success = ({ path }: { path: string }) => {
   const [animate, setAnimate] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { slug } = useParams<{ slug: string }>();
+  const storeDomain = getCustomStoreDomain();
   const order = (location.state as { order?: OrderSummary } | null)?.order;
 
   const { data: storeData, isFromCache } = useFetchData<StoreData>({
     store_url: slug || "",
+    store_domain: storeDomain,
     limit: 1,
   });
-  const { theme, vars: themeVars } = useStoreTheme(storeData, slug, !isFromCache);
+  const { theme, vars: themeVars } = useStoreTheme(
+    storeData,
+    slug || storeDomain,
+    !isFromCache,
+  );
   const brandPrimary = theme.primary;
   const currency = order?.currency || storeData?.results?.info?.currency || "₦";
 
@@ -24,7 +31,8 @@ const Success = ({ path }: { path: string }) => {
     setAnimate(true);
   }, []);
 
-  const handleGoHome = () => navigate(`${path}/${slug}`);
+  const handleGoHome = () =>
+    navigate(storeDomain ? path : `${path}/${slug}`);
 
   const formatAmount = (n: number) =>
     n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });

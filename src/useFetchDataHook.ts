@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { BaseUrl } from "./base-url";
+import { getStoreDataPath } from "./utils/storefront";
 
 interface UseFetchDataProps {
   store_url?: string;
+  store_domain?: string;
   autoFetch?: boolean;
   category_id?: string | null;
   search?: string;
@@ -50,6 +52,7 @@ const writeCache = (key: string, value: unknown) => {
 
 const useFetchData = <T,>({
   store_url,
+  store_domain,
   autoFetch = true,
   category_id = null,
   search = "",
@@ -63,8 +66,8 @@ const useFetchData = <T,>({
   };
 
   const buildUrl = (pageNum: number) => {
-    const storeUrl = getStoreUrl();
-    if (!storeUrl) return null;
+    const storePath = getStoreDataPath(getStoreUrl(), store_domain);
+    if (!storePath) return null;
 
     const params = new URLSearchParams();
     params.append("page", pageNum.toString());
@@ -78,7 +81,7 @@ const useFetchData = <T,>({
       params.append("search", search.trim());
     }
 
-    return `${BaseUrl}/${storeUrl}?${params.toString()}`;
+    return `${BaseUrl}${storePath}?${params.toString()}`;
   };
 
   const [state, setState] = useState<FetchResponse<T>>(() => {
@@ -188,7 +191,7 @@ const useFetchData = <T,>({
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store_url, autoFetch, category_id, search, page, limit]);
+  }, [store_url, store_domain, autoFetch, category_id, search, page, limit]);
 
   return {
     ...state,

@@ -17,6 +17,7 @@ import type { StoreData } from "../type";
 import { useCheckoutHook } from "../useCheckoutHook";
 import { isValidAkawopayPhone } from "../utils/akawopay";
 import { getPrimaryImage } from "../utils/media";
+import { getCustomStoreDomain } from "../utils/storefront";
 import { usePersistedState } from "../utils/usePersistedState";
 
 import BankTransfer from "./BankTransfer";
@@ -119,13 +120,15 @@ export const Checkout: React.FC<CheckoutProps> = ({
   } = useCheckoutHook({ type, storeData, onBack });
 
   const { slug } = useParams<{ slug: string }>();
+  const storeKey =
+    slug || getCustomStoreDomain() || storeData?.results?.info?.id;
 
   // BNPL fails at submit without a verified AkawoPay account, and the API's
   // "Invalid PIN" reads as a typo rather than a missing account. Explaining it
   // when Pay Later is first picked turns that dead end into a signup. Stored
   // per store so a returning buyer isn't stopped on every order.
   const [hasSeenBnplInfo, setHasSeenBnplInfo] = usePersistedState<boolean>(
-    slug,
+    storeKey,
     "bnpl-activation-seen",
     false,
   );

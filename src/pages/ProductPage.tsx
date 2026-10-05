@@ -14,6 +14,7 @@ import { CartContext } from "../context/CartContext";
 import type { Product, ProductVariation, StoreData } from "../type";
 import useFetchData from "../useFetchDataHook";
 import { useStoreTheme } from "../utils/theme";
+import { getCustomStoreDomain, getStorefrontPath } from "../utils/storefront";
 
 interface ProductPageProps {
   type: "in-store" | "out-store";
@@ -23,7 +24,8 @@ export const ProductPage = ({ type }: ProductPageProps) => {
   const { slug, productId } = useParams<{ slug: string; productId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const base = type === "in-store" ? "/i" : "/o";
+  const storeDomain = getCustomStoreDomain();
+  const base = getStorefrontPath(type, slug);
 
   const { addToCart, cart } = useContext(CartContext);
 
@@ -38,6 +40,7 @@ export const ProductPage = ({ type }: ProductPageProps) => {
     isFromCache,
   } = useFetchData<StoreData>({
     store_url: slug || "",
+    store_domain: storeDomain,
     limit: 100,
   });
 
@@ -57,10 +60,14 @@ export const ProductPage = ({ type }: ProductPageProps) => {
     window.scrollTo({ top: 0 });
   }, [product?.id]);
 
-  const { vars: themeVars } = useStoreTheme(storeData, slug, !isFromCache);
+  const { vars: themeVars } = useStoreTheme(
+    storeData,
+    slug || storeDomain,
+    !isFromCache,
+  );
 
   const goToStore = (state?: Record<string, unknown>) =>
-    navigate(`${base}/${slug}`, state ? { state } : undefined);
+    navigate(base, state ? { state } : undefined);
 
   // ---------- Loading / not-found ----------
   if (!product) {
@@ -391,6 +398,7 @@ export const ProductPage = ({ type }: ProductPageProps) => {
       <WhatsAppButton
         storeName={storeData?.results?.info?.name}
         storeData={storeData}
+        storeSlug={slug || storeDomain}
       />
 
       <Footer storeData={storeData} />

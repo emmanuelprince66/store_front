@@ -17,6 +17,7 @@ import { WhatsAppButton } from "../components/WhatsAppButton";
 import type { Product, StoreData } from "../type";
 import useFetchData from "../useFetchDataHook";
 import { useStoreTheme } from "../utils/theme";
+import { getCustomStoreDomain, getStoreDataPath } from "../utils/storefront";
 import { Checkout } from "./Checkout";
 
 const InStore = () => {
@@ -40,8 +41,7 @@ const InStore = () => {
 
   // Use useParams to get the slug from the URL path
   const { slug } = useParams<{ slug: string }>();
-
-  console.log("Slug from URL:", slug);
+  const storeDomain = getCustomStoreDomain();
 
   const [searchQuery, setSearchQuery] = useState(navState?.search ?? "");
   const [currentPage, setCurrentPage] = useState(1);
@@ -57,13 +57,19 @@ const InStore = () => {
     isFromCache,
   } = useFetchData<StoreData>({
     store_url: slug || "",
+    store_domain: storeDomain,
     category_id: selectedCategoryId,
     search: searchQuery,
     page: currentPage,
     limit: 20,
   });
 
-  const { vars: themeVars } = useStoreTheme(storeData, slug, !isFromCache);
+  const storeThemeKey = slug || storeDomain;
+  const { vars: themeVars } = useStoreTheme(
+    storeData,
+    storeThemeKey,
+    !isFromCache,
+  );
 
   const handleCategoryChange = (categoryId: string | null) => {
     setSelectedCategoryId(categoryId);
@@ -98,12 +104,13 @@ const InStore = () => {
   };
 
   const getStoreUrl = () => {
-    return slug || "cap&";
+    return slug || "";
   };
 
   const searchProductByBarcode = async (barcode: string) => {
-    const storeUrl = getStoreUrl();
-    const searchUrl = `${BaseUrl}/${storeUrl}?search=${encodeURIComponent(
+    const storePath = getStoreDataPath(getStoreUrl(), storeDomain);
+    if (!storePath) throw new Error("Store URL is required");
+    const searchUrl = `${BaseUrl}${storePath}?search=${encodeURIComponent(
       barcode,
     )}&page=1&limit=1`;
 
@@ -372,7 +379,7 @@ const InStore = () => {
         <WhatsAppButton
           storeName={storeData?.results?.info?.name}
           storeData={storeData}
-          storeSlug={slug}
+          storeSlug={storeThemeKey}
           stacked
         />
 

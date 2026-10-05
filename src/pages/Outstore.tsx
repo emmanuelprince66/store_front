@@ -8,6 +8,7 @@ import { WhatsAppButton } from "../components/WhatsAppButton";
 import type { StoreData } from "../type";
 import useFetchData from "../useFetchDataHook";
 import { useStoreTheme } from "../utils/theme";
+import { getCustomStoreDomain } from "../utils/storefront";
 import { Checkout } from "./Checkout";
 
 export const OutStore = () => {
@@ -30,6 +31,7 @@ export const OutStore = () => {
   const [bannerImage, setBannerImage] = useState<string>("");
 
   const { slug } = useParams<{ slug: string }>();
+  const storeDomain = getCustomStoreDomain();
 
   const {
     data: storeData,
@@ -40,13 +42,19 @@ export const OutStore = () => {
     isFromCache,
   } = useFetchData<StoreData>({
     store_url: slug,
+    store_domain: storeDomain,
     category_id: selectedCategoryId,
     search: searchQuery,
     page: currentPage,
     limit: 20,
   });
 
-  const { vars: themeVars } = useStoreTheme(storeData, slug, !isFromCache);
+  const storeThemeKey = slug || storeDomain;
+  const { vars: themeVars } = useStoreTheme(
+    storeData,
+    storeThemeKey,
+    !isFromCache,
+  );
 
   const handleCategoryChange = (categoryId: string | null) => {
     setSelectedCategoryId(categoryId);
@@ -242,7 +250,7 @@ export const OutStore = () => {
         <WhatsAppButton
           storeName={storeData?.results?.info?.name}
           storeData={storeData}
-          storeSlug={slug}
+          storeSlug={storeThemeKey}
         />
 
         <Footer storeData={storeData} />

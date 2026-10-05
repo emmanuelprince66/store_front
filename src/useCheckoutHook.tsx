@@ -33,6 +33,7 @@ import {
 } from "./utils/geocode";
 import { getPrimaryImage } from "./utils/media";
 import { usePersistedState } from "./utils/usePersistedState";
+import { getCustomStoreDomain, getStoreSuccessPath } from "./utils/storefront";
 
 // Order endpoints live at the API root (no /store), shared from base-url.ts.
 const BaseUrl = ApiBase;
@@ -152,6 +153,8 @@ export const useCheckoutHook = ({
 
   const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
+  const storeDomain = getCustomStoreDomain();
+  const storeKey = slug || storeDomain || storeData?.results?.info?.id;
 
   const [openPaymentModal, setOpenPaymentModal] = useState(false);
   const closePaymentModal = () => setOpenPaymentModal(false);
@@ -160,7 +163,7 @@ export const useCheckoutHook = ({
   // buyer taps back to the store or opens a product, and an address that has
   // to be retyped on every return is the single biggest drop-off in the flow.
   const [address, setAddress] = usePersistedState<Address | null>(
-    slug,
+    storeKey,
     ADDRESS_STORAGE_KEY,
     null,
   );
@@ -187,7 +190,11 @@ export const useCheckoutHook = ({
 
   // Customer state (for in-store) — persisted for the same reason as address.
   const [customerDetails, setCustomerDetails] =
-    usePersistedState<CustomerDetails | null>(slug, CUSTOMER_STORAGE_KEY, null);
+    usePersistedState<CustomerDetails | null>(
+      storeKey,
+      CUSTOMER_STORAGE_KEY,
+      null,
+    );
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [editCustomer, setEditCustomer] = useState<CustomerDetails | null>(
     null,
@@ -1061,7 +1068,9 @@ export const useCheckoutHook = ({
     if (!paymentSuccessOrder) return;
 
     setShowPaymentSuccessModal(false);
-    navigate("/o/success/" + slug, { state: { order: paymentSuccessOrder } });
+    navigate(getStoreSuccessPath(type, slug), {
+      state: { order: paymentSuccessOrder },
+    });
   };
 
   // Reset state after successful order.
@@ -1128,7 +1137,9 @@ export const useCheckoutHook = ({
         setBnplStage("approved");
         toast.success("BNPL order confirmed! Your installment plan is active.");
         resetCheckoutState();
-        navigate("/o/success/" + slug, { state: { order: orderSummary } });
+        navigate(getStoreSuccessPath(type, slug), {
+          state: { order: orderSummary },
+        });
         return;
       }
 
