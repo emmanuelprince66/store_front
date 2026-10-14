@@ -18,6 +18,10 @@ interface AddressAutocompleteProps {
   rows?: number;
   /** Drives the "location pinned" confirmation. Caller owns coordinate state. */
   hasCoordinates?: boolean;
+  /** Custom renderer when search returns no matches. */
+  renderNoResults?: () => React.ReactNode;
+  /** If true, omits the bottom helper text. */
+  hideHint?: boolean;
 }
 
 const FIELD_CLASSES =
@@ -31,6 +35,8 @@ const AddressAutocomplete = ({
   placeholder = "Start typing your address...",
   rows = 3,
   hasCoordinates = false,
+  renderNoResults,
+  hideHint = false,
 }: AddressAutocompleteProps) => {
   const [suggestions, setSuggestions] = useState<GeocodeSuggestion[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -66,7 +72,7 @@ const AddressAutocomplete = ({
       const results = await fetchAddressSuggestions(text, countryCode);
       if (ignore) return;
       setSuggestions(results);
-      setIsOpen(results.length > 0);
+      setIsOpen(results.length > 0 || Boolean(renderNoResults));
       setIsSearching(false);
     }, 350);
 
@@ -113,29 +119,35 @@ const AddressAutocomplete = ({
         <span className="absolute right-3 top-3 h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
       )}
 
-      {isOpen && suggestions.length > 0 && (
+      {isOpen && (
         <ul className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
-          {suggestions.map((s) => (
-            <li key={s.id}>
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => handleSelect(s)}
-                className="w-full cursor-pointer border-b border-gray-100 px-4 py-2.5 text-left last:border-b-0 hover:bg-gray-50"
-              >
-                <span className="block truncate text-sm font-medium text-gray-900">
-                  {s.address || s.label}
-                </span>
-                <span className="block truncate text-xs text-gray-500">
-                  {[s.city, s.state, s.country].filter(Boolean).join(", ")}
-                </span>
-              </button>
+          {suggestions.length > 0 ? (
+            suggestions.map((s) => (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleSelect(s)}
+                  className="w-full cursor-pointer border-b border-gray-100 px-4 py-2.5 text-left last:border-b-0 hover:bg-gray-50"
+                >
+                  <span className="block truncate text-sm font-medium text-gray-900">
+                    {s.address || s.label}
+                  </span>
+                  <span className="block truncate text-xs text-gray-500">
+                    {[s.city, s.state, s.country].filter(Boolean).join(", ")}
+                  </span>
+                </button>
+              </li>
+            ))
+          ) : !isSearching && renderNoResults ? (
+            <li className="p-3 text-center">
+              {renderNoResults()}
             </li>
-          ))}
+          ) : null}
         </ul>
       )}
 
-      {enabled && (
+      {enabled && !hideHint && (
         <p
           className={`mt-1 text-[11px] ${
             hasCoordinates ? "text-green-600" : "text-gray-500"

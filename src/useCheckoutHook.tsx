@@ -55,10 +55,13 @@ interface Address {
   state: string;
   city: string;
   /** Delivery coordinates, kept as strings to match the API's own typing.
-   * Set as a pair when the buyer picks an address suggestion; cleared as a
-   * pair whenever an address field is edited by hand. */
+   * Set when the buyer picks an address suggestion or captures GPS. */
   latitude?: string;
   longitude?: string;
+  /** Sourced via "search" autocomplete or device "gps" */
+  pinSource?: "search" | "gps" | null;
+  /** Radius of uncertainty in metres for GPS fixes */
+  gpsAccuracy?: number | null;
 }
 
 interface CustomerDetails {
@@ -379,13 +382,23 @@ export const useCheckoutHook = ({
         ...(prev || emptyAddress),
         [field]: value,
       };
-      // Coordinates describe the address they were resolved from. Once the
-      // buyer edits the location by hand they're stale, and stale coordinates
-      // are worse than none — they'd send the rider to the previous address.
-      // buildAddressPayload falls back to a centroid, so nothing is lost.
-      if (LOCATION_FIELDS.includes(field)) {
+      // Coordinates describe the address they were resolved from.
+      // If coordinates came from GPS, editing the street address does NOT clear the GPS coordinates
+      // (the street field serves as apartment/gate details for the rider), but changing country
+      // or state does clear them since the order moves to a different region.
+      // If coordinates came from search, typing any location field clears them so stale coordinates aren't kept.
+      if (prev?.pinSource === "gps") {
+        if (field === "country" || field === "state") {
+          next.latitude = "";
+          next.longitude = "";
+          next.pinSource = null;
+          next.gpsAccuracy = null;
+        }
+      } else if (LOCATION_FIELDS.includes(field)) {
         next.latitude = "";
         next.longitude = "";
+        next.pinSource = null;
+        next.gpsAccuracy = null;
       }
       return next;
     });
@@ -393,7 +406,11 @@ export const useCheckoutHook = ({
 
   // Applies a picked address suggestion as one atomic update. The form holds
   // ISO codes for country/state, so resolved names are mapped back first.
-  const applyAddressSuggestion = (suggestion: GeocodeSuggestion) => {
+  const applyAddressSuggestion = (
+    suggestion: GeocodeSuggestion,
+    pinSource: "search" | "gps" = "search",
+    gpsAccuracy?: number | null,
+  ) => {
     setEditAddress((prev) => {
       const base = prev || emptyAddress;
 
@@ -408,14 +425,41 @@ export const useCheckoutHook = ({
 
       return {
         ...base,
-        shippingAddress: suggestion.address || suggestion.label,
+        shippingAddress: suggestion.address || suggestion.label || base.shippingAddress,
         country: countryCode,
         state: matchedState?.isoCode || base.state,
         city: suggestion.city || base.city,
         latitude: suggestion.latitude,
         longitude: suggestion.longitude,
+        pinSource,
+        gpsAccuracy: gpsAccuracy !== undefined ? gpsAccuracy : base.gpsAccuracy,
       };
     });
+  };
+
+  const setCoordinates = (
+    latitude: string,
+    longitude: string,
+    pinSource: "search" | "gps" = "gps",
+    gpsAccuracy?: number | null,
+  ) => {
+    setEditAddress((prev) => ({
+      ...(prev || emptyAddress),
+      latitude,
+      longitude,
+      pinSource,
+      gpsAccuracy: gpsAccuracy !== undefined ? gpsAccuracy : prev?.gpsAccuracy,
+    }));
+  };
+
+  const clearCoordinates = () => {
+    setEditAddress((prev) => ({
+      ...(prev || emptyAddress),
+      latitude: "",
+      longitude: "",
+      pinSource: null,
+      gpsAccuracy: null,
+    }));
   };
 
   const handleCustomerFormChange = (
@@ -1518,6 +1562,8 @@ export const useCheckoutHook = ({
     // Handlers
     handleFormChange,
     applyAddressSuggestion,
+    setCoordinates,
+    clearCoordinates,
     handleCustomerFormChange,
     handleCardDetailsChange,
     handleAddressSave,

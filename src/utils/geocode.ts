@@ -25,6 +25,18 @@ import { City, State } from "country-state-city";
 
 const API_KEY = import.meta.env.VITE_GEOAPIFY_KEY as string | undefined;
 const AUTOCOMPLETE_URL = "https://api.geoapify.com/v1/geocode/autocomplete";
+const REVERSE_URL = "https://api.geoapify.com/v1/geocode/reverse";
+
+// Accuracy thresholds in metres for GPS geolocation
+export const MAX_USABLE_ACCURACY_M = 1000;
+export const GOOD_ACCURACY_M = 100;
+export const GPS_WATCH_WINDOW_MS = 8000;
+
+/** "12m" / "1.4km" / "604km" - friendly format for accuracy radius */
+export const formatAccuracy = (metres: number) =>
+  metres < 1000
+    ? `${Math.round(metres)}m`
+    : `${(metres / 1000).toFixed(metres < 10000 ? 1 : 0)}km`;
 
 export interface GeocodeSuggestion {
   id: string;
@@ -141,6 +153,93 @@ export const fetchAddressSuggestions = async (
     // checkout. The buyer can still type the address by hand.
     return [];
   }
+};
+
+/**
+ * Reverse-geocodes device GPS coordinates into a readable address suggestion.
+ * Tries Geoapify if configured, falling back to OpenStreetMap Nominatim.
+ * Returns null if no address is found; coordinates can still be used directly.
+ */
+export const fetchAddressFromCoordinates = async (
+  latitude: number,
+  longitude: number,
+): Promise<GeocodeSuggestion | null> => {
+  // 1. Try Geoapify if API_KEY is available
+  if (API_KEY) {
+    try {
+      const params = new URLSearchParams({
+        lat: String(latitude),
+        lon: String(longitude),
+        apiKey: API_KEY,
+        lang: "en",
+      });
+      const response = await fetch(`${REVERSE_URL}?${params}`);
+      if (response.ok) {
+        const data = await response.json();
+        const features: any[] = Array.isArray(data?.features) ? data.features : [];
+        if (features.length > 0) {
+          const mapped = mapFeature(features[0], 0);
+          if (mapped) return mapped;
+        }
+      }
+    } catch {
+      // Fall through to Nominatim
+    }
+  }
+
+  // 2. Free fallback via Nominatim
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`;
+    const response = await fetch(url, {
+      headers: { "Accept-Language": "en" },
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const addr = data?.address || {};
+      const road =
+        addr.road ||
+        addr.pedestrian ||
+        addr.suburb ||
+        addr.neighbourhood ||
+        "";
+      const houseNumber = addr.house_number || "";
+      const streetLine =
+        [houseNumber, road].filter(Boolean).join(" ") ||
+        data?.display_name?.split(",")?.[0] ||
+        "";
+      const city =
+        addr.city ||
+        addr.town ||
+        addr.village ||
+        addr.suburb ||
+        addr.county ||
+        "";
+      const state = normalizeStateName(addr.state || "");
+      const country = addr.country || "";
+      const countryCode = (addr.country_code || "").toUpperCase();
+
+      return {
+        id: String(data.place_id || Date.now()),
+        label: data.display_name || streetLine,
+        address:
+          streetLine ||
+          data?.display_name?.split(",").slice(0, 2).join(",") ||
+          "",
+        city,
+        state,
+        stateCode: "",
+        country,
+        countryCode,
+        latitude: String(latitude.toFixed(6)),
+        longitude: String(longitude.toFixed(6)),
+        precision: data.type || "gps",
+      };
+    }
+  } catch {
+    // Reverse geocode is best effort
+  }
+
+  return null;
 };
 
 // ─── Offline fallback: city / state centroid ────────────────────────────────

@@ -138,8 +138,7 @@ const ScannerModal = ({
                 </div>
               </div>
             )}
-
-            {/* Product Search Loading Overlay */}
+            {/* Product Search Loading Overlay */}\
             {isSearching && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-40">
                 <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-sm mx-4">
@@ -178,7 +177,6 @@ const ScannerModal = ({
                 </div>
               </div>
             )}
-
             <Html5QrcodePlugin
               fps={10}
               qrbox={250}

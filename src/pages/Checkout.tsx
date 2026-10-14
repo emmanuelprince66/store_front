@@ -77,6 +77,8 @@ export const Checkout: React.FC<CheckoutProps> = ({
     setCouponCode,
     handleFormChange,
     applyAddressSuggestion,
+    setCoordinates,
+    clearCoordinates,
     handleCustomerFormChange,
     handleAddressSave,
     handleCustomerSave,
@@ -484,6 +486,16 @@ export const Checkout: React.FC<CheckoutProps> = ({
                       {address.city && `${address.city}, `}
                       {address.state}, {address.country}
                     </p>
+                    {address.latitude && address.longitude && (
+                      <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                        <span>
+                          {address.pinSource === "gps"
+                            ? `Location pinned via GPS${address.gpsAccuracy ? ` (±${Math.round(address.gpsAccuracy)}m)` : ""}`
+                            : "Exact delivery point pinned"}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -948,6 +960,8 @@ export const Checkout: React.FC<CheckoutProps> = ({
           currentAddressForm={currentAddressForm}
           handleFormChange={handleFormChange}
           applyAddressSuggestion={applyAddressSuggestion}
+          setCoordinates={setCoordinates}
+          clearCoordinates={clearCoordinates}
           setEditAddress={setEditAddress}
           countryList={countryList}
           stateList={stateList}

@@ -6,6 +6,11 @@ import { countMedia, getPrimaryImage } from "../utils/media";
 import { getStorefrontPath, type StorefrontType } from "../utils/storefront";
 import { ProductImageWithPlaceholder } from "./ImagePlaceHolder";
 
+const toFiniteNumber = (value: unknown): number => {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+
 export const ProductCard = ({
   product,
   currency,
@@ -31,6 +36,10 @@ export const ProductCard = ({
 
   const primaryImage = getPrimaryImage(product);
   const mediaInfo = countMedia(product);
+  const variationPrices =
+    product?.variations?.map((variation) =>
+      toFiniteNumber(variation.selling_price),
+    ) ?? [];
 
   const isInCart = hasVariations
     ? cart.some((item) =>
@@ -39,22 +48,20 @@ export const ProductCard = ({
     : cart.some((item) => item.product.id === product.id && !item.variation);
 
   const displayPrice = hasVariations
-    ? Math.min(...product.variations!.map((v) => v.selling_price))
-    : product.selling_price || 0;
+    ? Math.min(...variationPrices)
+    : toFiniteNumber(product.selling_price);
 
   const isOutOfStock = product.status === "OUT-OF-STOCK";
   const isLowStock = product.status === "LOW";
   // Combo products don't carry their own stock count — just show status.
   const isCombo = product.type === "COMBO";
 
-  const hasDiscount =
-    product.discount != null && product.discount > 0 && !hasVariations;
-  const originalPrice = hasDiscount
-    ? displayPrice + (product.discount as number)
-    : null;
+  const discountAmount = toFiniteNumber(product.discount);
+  const hasDiscount = discountAmount > 0 && !hasVariations;
+  const originalPrice = hasDiscount ? displayPrice + discountAmount : null;
   const discountPct =
     hasDiscount && originalPrice
-      ? Math.round(((product.discount as number) / originalPrice) * 100)
+      ? Math.round((discountAmount / originalPrice) * 100)
       : 0;
 
   const handleQuickAdd = (e: React.MouseEvent) => {
@@ -70,10 +77,7 @@ export const ProductCard = ({
 
   return (
     <>
-      <div
-        onClick={openProduct}
-        className="group cursor-pointer flex flex-col"
-      >
+      <div onClick={openProduct} className="group cursor-pointer flex flex-col">
         {/* Image */}
         <div className="relative w-full aspect-square overflow-hidden rounded-2xl bg-[#f0f0f0]">
           <div className="absolute inset-0 p-4 sm:p-6 transition-transform duration-500 group-hover:scale-105">
@@ -112,7 +116,11 @@ export const ProductCard = ({
             )}
             {mediaInfo.videos > 0 ? (
               <span className="flex items-center gap-1 bg-black/70 text-white text-[10px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm">
-                <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
+                <svg
+                  className="w-2.5 h-2.5"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <path d="M8 5v14l11-7z" />
                 </svg>
                 Video
@@ -120,8 +128,18 @@ export const ProductCard = ({
             ) : (
               mediaInfo.total > 1 && (
                 <span className="flex items-center gap-1 bg-white/90 text-black text-[10px] font-semibold px-2 py-1 rounded-full shadow-sm backdrop-blur-sm">
-                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  <svg
+                    className="w-2.5 h-2.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
                   </svg>
                   {mediaInfo.total}
                 </span>
