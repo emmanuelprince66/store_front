@@ -1,4 +1,8 @@
-import { Html5Qrcode } from "html5-qrcode";
+import {
+  Html5Qrcode,
+  Html5QrcodeSupportedFormats,
+  Html5QrcodeScannerState,
+} from "html5-qrcode";
 import { useEffect, useRef, useState } from "react";
 
 interface Html5QrcodePluginProps {
@@ -48,18 +52,21 @@ const Html5QrcodePlugin = ({
       isInitializingRef.current = true;
 
       try {
-        // Check camera permission first
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" },
-        });
-        stream.getTracks().forEach((track) => track.stop());
-
-        if (!isMountedRef.current) return;
-
-        // Create scanner instance
+        // getCameras() requests permission when needed; opening a temporary
+        // stream here first made iPhones initialize the camera twice.
         const html5QrCode = new Html5Qrcode(qrcodeRegionId, {
           formatsToSupport: [
-            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.CODABAR,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.CODE_93,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.DATA_MATRIX,
+            Html5QrcodeSupportedFormats.ITF,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
           ],
           verbose: verbose,
           experimentalFeatures: {
@@ -71,7 +78,21 @@ const Html5QrcodePlugin = ({
 
         const config = {
           fps,
-          qrbox: { width: qrbox, height: qrbox },
+          // Wide, short box sized to the actual video: fewer pixels for the
+          // decoder per frame (matters on iPhone, which decodes in JS), and
+          // never larger than the stream, which would make the library fall
+          // back to decoding the whole frame.
+          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+            const width = Math.max(
+              50,
+              Math.floor(Math.min(viewfinderWidth * 0.85, qrbox)),
+            );
+            const height = Math.max(
+              50,
+              Math.floor(Math.min(viewfinderHeight * 0.6, width * 0.6)),
+            );
+            return { width, height };
+          },
           aspectRatio,
           disableFlip,
         };
@@ -105,87 +126,39 @@ const Html5QrcodePlugin = ({
           }
         };
 
-        // Get cameras and start scanning
-        const cameras = await Html5Qrcode.getCameras();
-        if (cameras && cameras.length > 0) {
-          // Prefer back camera
-          const backCamera = cameras.find((device) =>
-            device.label.toLowerCase().includes("back")
-          );
-          const cameraId = backCamera?.id || cameras[0].id;
+        // Ask for the rear camera directly instead of getCameras() + label
+        // matching: getCameras() opens the camera once just to read labels
+        // (slow on iPhone), and on Pro iPhones the first "back" label can be
+        // the ultra-wide lens, which can't focus up close on a barcode.
+        if (!isMountedRef.current) return;
 
-          if (!isMountedRef.current) return;
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          config,
+          onScanSuccess,
+          onScanError,
+        );
 
-          await html5QrCode.start(cameraId, config, onScanSuccess, onScanError);
+        if (!isMountedRef.current) {
+          // If unmounted during start, stop immediately
+          await html5QrCode.stop();
+          await html5QrCode.clear();
+          return;
+        }
 
-          if (!isMountedRef.current) {
-            // If unmounted during start, stop immediately
-            await html5QrCode.stop();
-            await html5QrCode.clear();
-            return;
-          }
-
-          // Notify parent that camera is ready
-          if (onCameraReady) {
-            onCameraReady();
-          }
-
-          // Apply custom styles after successful start
-          setTimeout(() => {
-            if (!isMountedRef.current) return;
-
-            const scannerElement = document.getElementById(qrcodeRegionId);
-            if (scannerElement) {
-              // Style buttons
-              const buttons = scannerElement.querySelectorAll("button");
-              buttons.forEach((button) => {
-                button.style.cssText = `
-                  background: linear-gradient(to right, #10b981, #059669) !important;
-                  color: white !important;
-                  border: none !important;
-                  padding: 12px 24px !important;
-                  border-radius: 8px !important;
-                  font-weight: 600 !important;
-                  cursor: pointer !important;
-                  transition: all 0.3s ease !important;
-                  margin: 8px !important;
-                `;
-
-                button.onmouseover = () => {
-                  button.style.transform = "scale(1.05)";
-                  button.style.boxShadow = "0 4px 12px rgba(16, 185, 129, 0.4)";
-                };
-
-                button.onmouseout = () => {
-                  button.style.transform = "scale(1)";
-                  button.style.boxShadow = "none";
-                };
-              });
-
-              // Style select elements
-              const selects = scannerElement.querySelectorAll("select");
-              selects.forEach((select) => {
-                select.style.cssText = `
-                  padding: 10px 16px !important;
-                  border: 2px solid #d1d5db !important;
-                  border-radius: 8px !important;
-                  font-size: 14px !important;
-                  background-color: white !important;
-                  cursor: pointer !important;
-                  margin: 8px !important;
-                  width: auto !important;
-                  min-width: 200px !important;
-                `;
-              });
-            }
-          }, 100);
+        // Notify parent that camera is ready
+        if (onCameraReady) {
+          onCameraReady();
         }
       } catch (err: any) {
         console.error("Scanner initialization error:", err);
+        // start() rejects with plain strings, e.g. "Error getting userMedia,
+        // error = NotAllowedError: ..."
+        const rawMsg = typeof err === "string" ? err : err?.message || "";
         const errorMsg =
-          err.name === "NotAllowedError"
+          err?.name === "NotAllowedError" || rawMsg.includes("NotAllowedError")
             ? "Camera permission denied"
-            : err?.message || "Failed to initialize scanner";
+            : rawMsg || "Failed to initialize scanner";
 
         if (isMountedRef.current) {
           setError(errorMsg);
@@ -209,11 +182,15 @@ const Html5QrcodePlugin = ({
         // Stop and clear scanner
         if (scannerRef.current) {
           try {
-            const state = await scannerRef.current.getState();
+            const state = scannerRef.current.getState();
             console.log("Scanner state:", state);
 
-            if (state === 2) {
-              // SCANNING
+            // PAUSED too: the modal can close while a barcode lookup has
+            // the scanner paused, and clear() throws unless stop() ran.
+            if (
+              state === Html5QrcodeScannerState.SCANNING ||
+              state === Html5QrcodeScannerState.PAUSED
+            ) {
               console.log("Stopping scanner...");
               await scannerRef.current.stop();
               console.log("Scanner stopped");
@@ -267,22 +244,12 @@ const Html5QrcodePlugin = ({
   useEffect(() => {
     if (!scannerRef.current) return;
 
-    const handlePauseResume = async () => {
-      try {
-        const state = await scannerRef.current!.getState();
-
-        if (isPaused && state === 2) {
-          // Pause scanning by not processing results
-          console.log("Scanner paused");
-        } else if (!isPaused && state === 2) {
-          console.log("Scanner resumed");
-        }
-      } catch (err) {
-        console.warn("Error handling pause/resume:", err);
-      }
-    };
-
-    handlePauseResume();
+    const state = scannerRef.current.getState();
+    if (isPaused && state === Html5QrcodeScannerState.SCANNING) {
+      scannerRef.current.pause(true);
+    } else if (!isPaused && state === Html5QrcodeScannerState.PAUSED) {
+      scannerRef.current.resume();
+    }
   }, [isPaused]);
 
   if (error) {

@@ -37,6 +37,7 @@ const InStore = () => {
     navState?.categoryId ?? null,
   );
   const [bannerLoaded, setBannerLoaded] = useState(false);
+  const [loadedBannerImage, setLoadedBannerImage] = useState("");
   const [bannerImage, setBannerImage] = useState<string>("");
 
   // Use useParams to get the slug from the URL path
@@ -80,18 +81,14 @@ const InStore = () => {
   useEffect(() => {
     const storeBanner = storeData?.results?.info?.banner || "";
 
-    // Only use placeholder if banner is undefined, empty string, or falsy
-    if (!storeBanner && !isLoading) {
+    if (storeBanner) {
+      setBannerImage(storeBanner);
+    } else if (!isLoading && !bannerImage) {
       setBannerImage(
         "https://images.unsplash.com/photo-1441986300917-64674bd600d8?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80",
       );
-      setBannerLoaded(false);
-    } else {
-      // Reset loaded state when banner URL changes
-      setBannerLoaded(false);
-      setBannerImage(storeBanner);
     }
-  }, [storeData?.results?.info?.banner, isLoading]);
+  }, [storeData?.results?.info?.banner, isLoading, bannerImage]);
 
   const handleSearchChange = (search: string) => {
     setSearchQuery(search);
@@ -257,20 +254,26 @@ const InStore = () => {
         {/* Hero Banner */}
         <div className="relative text-white overflow-hidden">
           <div className="absolute inset-0">
-            {!bannerLoaded && (
+            {(!bannerLoaded || loadedBannerImage !== bannerImage) && (
               <div className="w-full h-full bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 animate-pulse" />
             )}
 
             {bannerImage && (
               <img
+                key={bannerImage}
                 src={bannerImage}
                 alt="Shopping background"
                 fetchPriority="high"
                 decoding="async"
                 className={`w-full h-full object-cover transition-opacity duration-700 ${
-                  bannerLoaded ? "opacity-100" : "opacity-0"
+                  bannerLoaded && loadedBannerImage === bannerImage
+                    ? "opacity-100"
+                    : "opacity-0"
                 }`}
-                onLoad={() => setBannerLoaded(true)}
+                onLoad={() => {
+                  setLoadedBannerImage(bannerImage);
+                  setBannerLoaded(true);
+                }}
               />
             )}
             <div className="absolute inset-0 bg-black/55" />

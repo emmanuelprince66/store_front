@@ -138,7 +138,7 @@ const ScannerModal = ({
                 </div>
               </div>
             )}
-            {/* Product Search Loading Overlay */}\
+            {/* Product Search Loading Overlay */}
             {isSearching && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-40">
                 <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-sm mx-4">
@@ -179,8 +179,10 @@ const ScannerModal = ({
             )}
             <Html5QrcodePlugin
               fps={10}
-              qrbox={250}
-              disableFlip={false}
+              qrbox={300}
+              // Rear-camera barcodes are never mirrored; flipping made every
+              // missed frame decode twice, which is costly on iPhone.
+              disableFlip={true}
               qrCodeSuccessCallback={onScanSuccess}
               qrCodeErrorCallback={handleScanError}
               onCameraReady={handleCameraReady}
@@ -215,6 +217,12 @@ const ScannerModal = ({
 
         #html5qr-code-full-region video {
           border-radius: 8px;
+        }
+
+        /* The library's own dark "Scanner paused" strip (the only child div
+           without an id); our "Searching Product" overlay replaces it. */
+        #html5qr-code-full-region > div:not([id]) {
+          display: none !important;
         }
 
         /* Style the scanner region text */
