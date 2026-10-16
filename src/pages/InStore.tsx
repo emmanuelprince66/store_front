@@ -17,7 +17,11 @@ import { WhatsAppButton } from "../components/WhatsAppButton";
 import type { Product, StoreData } from "../type";
 import useFetchData from "../useFetchDataHook";
 import { useStoreTheme } from "../utils/theme";
-import { getCustomStoreDomain, getStoreDataPath } from "../utils/storefront";
+import {
+  getCustomStoreDomain,
+  getProductCategories,
+  getStoreDataPath,
+} from "../utils/storefront";
 import { Checkout } from "./Checkout";
 
 const InStore = () => {
@@ -242,7 +246,7 @@ const InStore = () => {
         ) : (
           <Navbar
             storeData={storeData}
-            categories={storeData?.results?.categories || []}
+            categories={getProductCategories(storeData?.results?.categories)}
             selectedCategoryId={selectedCategoryId}
             onCategoryChange={handleCategoryChange}
             searchQuery={searchQuery}
@@ -302,7 +306,7 @@ const InStore = () => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
             <ProductList
               products={storeData?.results?.products || []}
-              categories={storeData?.results?.categories || []}
+              categories={getProductCategories(storeData?.results?.categories)}
               currency={storeData?.results?.info.currency || "₦"}
               isLoading={isLoading}
               selectedCategoryId={selectedCategoryId}

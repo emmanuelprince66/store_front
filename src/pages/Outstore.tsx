@@ -8,7 +8,10 @@ import { WhatsAppButton } from "../components/WhatsAppButton";
 import type { StoreData } from "../type";
 import useFetchData from "../useFetchDataHook";
 import { useStoreTheme } from "../utils/theme";
-import { getCustomStoreDomain } from "../utils/storefront";
+import {
+  getCustomStoreDomain,
+  getProductCategories,
+} from "../utils/storefront";
 import { Checkout } from "./Checkout";
 
 export const OutStore = () => {
@@ -139,7 +142,7 @@ export const OutStore = () => {
         ) : (
           <Navbar
             storeData={storeData}
-            categories={storeData?.results?.categories || []}
+            categories={getProductCategories(storeData?.results?.categories)}
             selectedCategoryId={selectedCategoryId}
             onCategoryChange={handleCategoryChange}
             searchQuery={searchQuery}
@@ -213,7 +216,7 @@ export const OutStore = () => {
                 </div>
                 <div className="text-center sm:text-left sm:pl-6">
                   <p className="font-display text-2xl sm:text-4xl text-white">
-                    {storeData?.results?.categories?.length ?? "—"}+
+                    {storeData ? getProductCategories(storeData.results?.categories).length : "—"}+
                   </p>
                   <p className="text-[10px] sm:text-sm text-white/70 mt-0.5">
                     Categories
@@ -236,7 +239,7 @@ export const OutStore = () => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
             <ProductList
               products={storeData?.results?.products || []}
-              categories={storeData?.results?.categories || []}
+              categories={getProductCategories(storeData?.results?.categories)}
               currency={storeData?.results?.info.currency || "₦"}
               isLoading={isLoading}
               selectedCategoryId={selectedCategoryId}

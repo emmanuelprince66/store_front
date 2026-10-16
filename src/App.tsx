@@ -45,10 +45,24 @@ function App() {
             path="/out/success"
             element={<Success path="/out" />}
           />
+          <Route path="/services" element={<Services />} />
+          <Route path="/services/:serviceId" element={<Services />} />
+          <Route path="/services/bookings/:reference" element={<Services />} />
+          <Route path="/bookings/:reference" element={<Services />} />
           <Route path="/i/:slug" element={<InStore />} />
           <Route path="/o/:slug" element={<OutStore />} />
           <Route path="/i/:slug/services" element={<Services />} />
           <Route path="/o/:slug/services" element={<Services />} />
+          <Route path="/i/:slug/services/:serviceId" element={<Services />} />
+          <Route path="/o/:slug/services/:serviceId" element={<Services />} />
+          <Route
+            path="/i/:slug/services/bookings/:reference"
+            element={<Services />}
+          />
+          <Route
+            path="/o/:slug/services/bookings/:reference"
+            element={<Services />}
+          />
           <Route
             path="/i/:slug/product/:productId"
             element={<ProductPage type="in-store" />}

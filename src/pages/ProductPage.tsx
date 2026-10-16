@@ -14,7 +14,11 @@ import { CartContext } from "../context/CartContext";
 import type { Product, ProductVariation, StoreData } from "../type";
 import useFetchData from "../useFetchDataHook";
 import { useStoreTheme } from "../utils/theme";
-import { getCustomStoreDomain, getStorefrontPath } from "../utils/storefront";
+import {
+  getCustomStoreDomain,
+  getProductCategories,
+  getStorefrontPath,
+} from "../utils/storefront";
 
 interface ProductPageProps {
   type: "in-store" | "out-store";
@@ -78,7 +82,7 @@ export const ProductPage = ({ type }: ProductPageProps) => {
       >
         <Navbar
           storeData={storeData}
-          categories={storeData?.results?.categories || []}
+          categories={getProductCategories(storeData?.results?.categories)}
           selectedCategoryId={null}
           onCategoryChange={(id) => goToStore({ categoryId: id })}
           searchQuery=""
@@ -155,7 +159,7 @@ export const ProductPage = ({ type }: ProductPageProps) => {
     >
       <Navbar
         storeData={storeData}
-        categories={storeData?.results?.categories || []}
+        categories={getProductCategories(storeData?.results?.categories)}
         selectedCategoryId={null}
         onCategoryChange={(id) => goToStore({ categoryId: id })}
         searchQuery=""

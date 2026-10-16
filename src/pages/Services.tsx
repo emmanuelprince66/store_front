@@ -1,99 +1,54 @@
-import { useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { toast } from "react-toastify";
+import { getErrorMessage } from "../api/client";
+import type {
+  AvailableSlot,
+  BookingHoldDetails,
+  BookingPaymentChannel,
+  BookingPaymentOption,
+  BookingVirtualAccount,
+  CreateBookingHoldPayload,
+  ServiceDetailResponse,
+  StoreBusinessInfo,
+  StoreServiceItem,
+  StoreTarget,
+} from "../api/services";
+import {
+  calculateServiceCharges,
+  createBookingHold,
+  fetchServiceDetail,
+  fetchStoreServices,
+  pollBookingPaymentVerification,
+  verifyBookingPayment,
+} from "../api/services";
+import { ProductCardSkeleton } from "../components/CardSkeleton";
+import { Footer } from "../components/Footer";
+import { Navbar } from "../components/Navbar";
+import { ServiceCard } from "../components/ServiceCard";
+import { BankTransferPaymentView } from "../components/services/BankTransferPaymentView";
+import { BookingHoldTimer } from "../components/services/BookingHoldTimer";
+import { CardPaymentForm } from "../components/services/CardPaymentForm";
+import { ServiceSelfServicePortal } from "../components/services/ServiceSelfServicePortal";
+import { ThreeDsRedirectModal } from "../components/services/ThreeDsRedirectModal";
+import { PaymentPinField } from "../components/PaymentPinField";
+import { WhatsAppButton } from "../components/WhatsAppButton";
+import type { Category, StoreData } from "../type";
+import useFetchData from "../useFetchDataHook";
 import { getCustomStoreDomain } from "../utils/storefront";
-import { useThemeSnapshot } from "../utils/theme";
+import { useStoreTheme } from "../utils/theme";
+import { isValidAkawopayPhone } from "../utils/akawopay";
+import OtpModal from "./OtpModal";
 
-type Service = {
-  id: string;
-  name: string;
-  description: string;
-  duration: number;
-  price: number;
-  initials: string;
-  color: string;
-};
-
-type PaymentMethod = "CARD" | "BANK-TRANSFER" | "BNPL";
-
-const SERVICES: Service[] = [
-  {
-    id: "haircut",
-    name: "Haircut",
-    description: "Classic haircut and styling for all hair types",
-    duration: 45,
-    price: 5000,
-    initials: "HA",
-    color: "#83e9a9",
-  },
-  {
-    id: "beard-trim",
-    name: "Beard Trim",
-    description: "Professional beard shaping and grooming",
-    duration: 30,
-    price: 3000,
-    initials: "BE",
-    color: "#91c2fb",
-  },
-  {
-    id: "haircut-beard",
-    name: "Haircut + Beard",
-    description: "Complete grooming package — hair and beard",
-    duration: 60,
-    price: 7000,
-    initials: "HA",
-    color: "#c5b3fb",
-  },
-];
-
-const TIME_SLOTS = [
-  "9:00 AM",
-  "9:45 AM",
-  "10:30 AM",
-  "11:15 AM",
-  "2:00 PM",
-  "2:45 PM",
-  "3:30 PM",
-  "4:15 PM",
-];
-
-const PAYMENT_METHODS: {
-  value: PaymentMethod;
-  label: string;
-  description: string;
-  icon: string;
-}[] = [
-  {
-    value: "CARD",
-    label: "Card",
-    description: "Pay securely with your debit or credit card",
-    icon: "M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z",
-  },
-  {
-    value: "BANK-TRANSFER",
-    label: "Bank transfer",
-    description: "Transfer directly to the business account",
-    icon: "M3 10h18M5 10V7l7-4 7 4v3M5 10v10m4-10v10m6-10v10m4-10v10M3 20h18",
-  },
-  {
-    value: "BNPL",
-    label: "Buy Now, Pay Later",
-    description: "Book now and pay in installments",
-    icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
-  },
-];
-
-const formatCurrency = (amount: number, currency: string) => {
-  const formattedAmount = new Intl.NumberFormat("en-NG", {
-    maximumFractionDigits: 0,
-  }).format(amount);
-
-  return /^[A-Z]{3}$/.test(currency)
-    ? new Intl.NumberFormat("en-NG", {
-        style: "currency",
-        currency,
-        maximumFractionDigits: 0,
-      }).format(amount)
-    : `${currency}${formattedAmount}`;
+const formatCurrency = (amount: number | string, currency = "₦") => {
+  const num = typeof amount === "string" ? parseFloat(amount) || 0 : amount;
+  return new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: /^[A-Z]{3}$/.test(currency) ? currency : "NGN",
+    maximumFractionDigits: 2,
+  })
+    .format(num)
+    .replace("NGN", currency.trim() || "₦");
 };
 
 const localDateKey = (date: Date) =>
@@ -101,30 +56,67 @@ const localDateKey = (date: Date) =>
     date.getDate(),
   ).padStart(2, "0")}`;
 
-const StepIcon = ({ path }: { path: string }) => (
-  <svg
-    aria-hidden="true"
-    className="h-5 w-5"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path
-      d={path}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.8"
-    />
-  </svg>
-);
+export const Services = () => {
+  const navigate = useNavigate();
+  const { slug, serviceId: urlServiceId, reference: urlReference } = useParams<{
+    slug?: string;
+    serviceId?: string;
+    reference?: string;
+  }>();
 
-const Services = () => {
-  const { slug } = useParams<{ slug: string }>();
-  const [step, setStep] = useState(0);
-  const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const location = useLocation();
+
+  // Dual URL resolution
+  const storeDomain = getCustomStoreDomain();
+  const storeUrlParam = new URLSearchParams(location.search).get("store_url");
+  const effectiveSlug = slug || storeUrlParam || undefined;
+
+  const target: StoreTarget = useMemo(
+    () => ({
+      storeDomain,
+      storeSlug: storeDomain ? undefined : effectiveSlug,
+    }),
+    [storeDomain, effectiveSlug],
+  );
+
+  // Fetch core store info to synchronize brand theme, logo, banner, and footer
+  const { data: storeData, isFromCache } = useFetchData<StoreData>({
+    store_url: effectiveSlug,
+    store_domain: storeDomain,
+  });
+
+  const storeThemeKey = effectiveSlug || storeDomain;
+  const { vars: themeVars } = useStoreTheme(storeData, storeThemeKey, !isFromCache);
+
+  // View state
+  const [activeTab, setActiveTab] = useState<"book" | "lookup">(
+    urlReference ? "lookup" : "book",
+  );
+  const [step, setStep] = useState(0); // 0: Catalog, 1: Date & Slot, 2: Customer, 3: Payment, 4: Transfer Hold, 5: Confirmed
+
+  // Catalog state
+  const [businessInfo, setBusinessInfo] = useState<StoreBusinessInfo | null>(null);
+  const [services, setServices] = useState<StoreServiceItem[]>([]);
+  const [serviceCategories, setServiceCategories] = useState<Category[]>([]);
+  // Holds the category id (sent to the API as category_id), not its name.
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [servicesRefreshKey, setServicesRefreshKey] = useState(0);
+  const [isLoadingServices, setIsLoadingServices] = useState(true);
+
+  // Banner loading state matching Outstore.tsx
+  const [bannerLoaded, setBannerLoaded] = useState(false);
+  const [loadedBannerImage, setLoadedBannerImage] = useState("");
+  const [bannerImage, setBannerImage] = useState<string>("");
+
+  // Selected Service & Dynamic Slots state
+  const [selectedService, setSelectedService] = useState<StoreServiceItem | null>(null);
+  const [serviceDetail, setServiceDetail] = useState<ServiceDetailResponse | null>(null);
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [selectedDate, setSelectedDate] = useState(localDateKey(new Date()));
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>("CARD");
+  const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
+
+  // Customer Details
   const [customer, setCustomer] = useState({
     name: "",
     phone: "",
@@ -132,33 +124,182 @@ const Services = () => {
     notes: "",
   });
 
-  const storeDomain = getCustomStoreDomain();
-  const { vars: themeVars } = useThemeSnapshot(slug || storeDomain);
-  const storeName = "Tobi's Grooming Lounge";
-  const storeLocation = "Lagos, Nigeria";
-  const currency = "₦";
+  // Payment Options & Method
+  const [paymentOption, setPaymentOption] = useState<BookingPaymentOption>("FULL_PAYMENT");
+  const [paymentMethod, setPaymentMethod] = useState<BookingPaymentChannel>("CARD");
+  // Raw text of the customer's deposit input (only used for "DEPOSIT").
+  const [depositInput, setDepositInput] = useState("");
+  const [cardDetails, setCardDetails] = useState({
+    cardNumber: "",
+    expiryDate: "",
+    cvv: "",
+    cardPin: "",
+  });
+  const [akawopayPin, setAkawopayPin] = useState("");
 
-  const dates = useMemo(
-    () =>
-      Array.from({ length: 7 }, (_, index) => {
-        const date = new Date();
-        date.setDate(date.getDate() + index);
-        return date;
-      }),
-    [],
-  );
+  // Booking Hold & Payment Execution state
+  const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
+  const [bookingHold, setBookingHold] = useState<BookingHoldDetails | null>(null);
+  const [virtualAccounts, setVirtualAccounts] = useState<BookingVirtualAccount[]>([]);
+  const [isHoldExpired, setIsHoldExpired] = useState(false);
 
-  const dateLabel = (value: string, options: Intl.DateTimeFormatOptions) =>
-    new Intl.DateTimeFormat("en-NG", options).format(new Date(`${value}T12:00:00`));
+  // Modals
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [showThreeDsModal, setShowThreeDsModal] = useState(false);
+  const [threeDsRedirectHtml, setThreeDsRedirectHtml] = useState<string | undefined>();
 
-  const updateCustomer = (field: keyof typeof customer, value: string) => {
-    setCustomer((current) => ({ ...current, [field]: value }));
+  // Initialize banner image
+  useEffect(() => {
+    const storeBanner = storeData?.results?.info?.banner || "";
+    if (storeBanner) {
+      setBannerImage(storeBanner);
+    } else if (!bannerImage) {
+      setBannerImage(
+        "https://images.unsplash.com/photo-1560066984-138dadb4c035?ixlib=rb-1.2.1&auto=format&fit=crop&w=1200&q=75",
+      );
+    }
+  }, [storeData?.results?.info?.banner, bannerImage]);
+
+  // Fetch Services List
+  useEffect(() => {
+    let isMounted = true;
+    const loadServices = async () => {
+      setIsLoadingServices(true);
+      try {
+        const data = await fetchStoreServices(target, {
+          category_id: selectedCategory,
+          search: searchQuery,
+        });
+        if (isMounted) {
+          setBusinessInfo(data.business);
+          setServices(data.services || []);
+          // Service categories come from this endpoint, separate from the
+          // product categories on the main store response.
+          if (data.categories) {
+            setServiceCategories(
+              data.categories.filter((c) => c.type === "SERVICE"),
+            );
+          }
+        }
+      } catch (err) {
+        if (isMounted) {
+          toast.error(
+            getErrorMessage(err, "Failed to load services for this store."),
+          );
+          setServices([]);
+        }
+      } finally {
+        if (isMounted) setIsLoadingServices(false);
+      }
+    };
+
+    loadServices();
+    return () => {
+      isMounted = false;
+    };
+  }, [target, selectedCategory, searchQuery, servicesRefreshKey]);
+
+  // Handle direct url serviceId param if present
+  useEffect(() => {
+    if (urlServiceId && services.length > 0 && !selectedService) {
+      const match = services.find((s) => s.id === urlServiceId);
+      if (match) {
+        startBooking(match);
+      }
+    }
+  }, [urlServiceId, services, selectedService]);
+
+  // Re-fetch service slot details when the selected service or date changes.
+  useEffect(() => {
+    if (!selectedService) return;
+
+    let isMounted = true;
+    const loadSlotDetails = async () => {
+      setIsLoadingSlots(true);
+      try {
+        const detail = await fetchServiceDetail(target, selectedService.id, {
+          date: selectedDate,
+        });
+        if (isMounted) {
+          setServiceDetail(detail);
+          setSelectedSlot(null);
+
+          if (detail.payment_options) {
+            const options = detail.payment_options;
+            setPaymentOption((current) => {
+              if (
+                (current === "FULL_PAYMENT" && options.allow_full_payment) ||
+                (current === "DEPOSIT" && options.allow_deposit) ||
+                (current === "PAY_AT_BUSINESS" && options.allow_pay_at_business)
+              ) {
+                return current;
+              }
+              if (options.allow_full_payment) return "FULL_PAYMENT";
+              if (options.allow_deposit) return "DEPOSIT";
+              return "PAY_AT_BUSINESS";
+            });
+
+            const channels = options.channels?.filter(
+              (channel): channel is "CARD" | "BANK-TRANSFER" | "BNPL" =>
+                channel === "CARD" ||
+                channel === "BANK-TRANSFER" ||
+                channel === "BNPL",
+            );
+            if (channels?.length) {
+              setPaymentMethod((current) =>
+                channels.includes(current as "CARD" | "BANK-TRANSFER" | "BNPL")
+                  ? current
+                  : channels[0],
+              );
+            }
+          }
+        }
+      } catch (err) {
+        if (isMounted) {
+          toast.error(getErrorMessage(err, "Failed to load appointment slots."));
+        }
+      } finally {
+        if (isMounted) setIsLoadingSlots(false);
+      }
+    };
+
+    loadSlotDetails();
+    return () => {
+      isMounted = false;
+    };
+  }, [target, selectedService, selectedDate]);
+
+  const selectedCategoryName = serviceCategories.find(
+    (c) => c.id === selectedCategory,
+  )?.name;
+
+  // Calendar dates list (up to max_advance_days, defaults to 14 days)
+  const maxAdvance = serviceDetail?.booking_rules?.max_advance_days || 14;
+  const calendarDates = useMemo(() => {
+    return Array.from({ length: Math.min(maxAdvance, 30) }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      return d;
+    });
+  }, [maxAdvance]);
+
+  // Determine if a calendar date is closed per operating_schedule
+  const isDateClosed = (date: Date) => {
+    if (!serviceDetail?.operating_schedule) return false;
+    const jsDay = date.getDay(); // 0 is Sunday
+    const djangoDay = (jsDay + 6) % 7;
+    const dayConfig = serviceDetail.operating_schedule.find(
+      (s) => s.day_of_week === djangoDay,
+    );
+    return dayConfig?.is_closed ?? false;
   };
 
-  const startBooking = (service: Service) => {
+  const startBooking = (service: StoreServiceItem) => {
     setSelectedService(service);
+    setSelectedSlot(null);
     setSelectedDate(localDateKey(new Date()));
-    setSelectedTime(null);
+    setIsHoldExpired(false);
     setStep(1);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -168,483 +309,1267 @@ const Services = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const canContinueToDetails = Boolean(selectedDate && selectedTime);
-  const canContinueToPayment =
-    customer.name.trim().length > 0 &&
-    customer.phone.trim().length > 0 &&
-    customer.email.trim().length > 0;
+  const returnToCatalog = () => {
+    setSelectedService(null);
+    setServiceDetail(null);
+    setSelectedSlot(null);
+    setSelectedDate(localDateKey(new Date()));
+    setCustomer({ name: "", phone: "", email: "", notes: "" });
+    setPaymentOption("FULL_PAYMENT");
+    setPaymentMethod("CARD");
+    setDepositInput("");
+    setCardDetails({ cardNumber: "", expiryDate: "", cvv: "", cardPin: "" });
+    setAkawopayPin("");
+    setBookingHold(null);
+    setVirtualAccounts([]);
+    setIsHoldExpired(false);
+    setShowOtpModal(false);
+    setShowThreeDsModal(false);
+    setThreeDsRedirectHtml(undefined);
+    setSelectedCategory(null);
+    setSearchQuery("");
+    setServicesRefreshKey((current) => current + 1);
+    setActiveTab("book");
+    setStep(0);
 
-  const pageTitle = [
-    "Our Services",
-    `Book ${selectedService?.name ?? "a service"}`,
-    "Your Details",
-    "Complete Booking",
-    "Booking Confirmed",
-  ][step];
+    const storePath = slug
+      ? `${location.pathname.startsWith("/o/") ? "/o" : "/i"}/${encodeURIComponent(slug)}/services`
+      : "/services";
+    navigate(`${storePath}${location.search}`, { replace: true });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
-  const summary = selectedService && (
-    <div className="rounded-2xl border border-[#e7ece8] bg-white p-4">
-      <div className="flex items-center gap-3">
-        <span
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-[#102d20]"
-          style={{ backgroundColor: selectedService.color }}
-        >
-          {selectedService.initials}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-bold text-[#16231c]">
-            {selectedService.name}
-          </p>
-          <p className="text-xs text-[#77827b]">
-            {selectedService.duration} minutes
-          </p>
-        </div>
-        <p className="font-extrabold text-[#278e5b]">
-          {formatCurrency(selectedService.price, currency)}
-        </p>
-      </div>
-      {step >= 2 && (
-        <div className="mt-4 space-y-2 border-t border-[#edf0ee] pt-3 text-sm">
-          <div className="flex justify-between gap-3">
-            <span className="text-[#77827b]">Date</span>
-            <span className="text-right font-medium text-[#26322b]">
-              {dateLabel(selectedDate, {
-                weekday: "long",
-                month: "short",
-                day: "numeric",
-              })}
-            </span>
-          </div>
-          <div className="flex justify-between gap-3">
-            <span className="text-[#77827b]">Time</span>
-            <span className="font-medium text-[#26322b]">{selectedTime}</span>
-          </div>
-        </div>
-      )}
-    </div>
+  // Financial calculations
+  const currencySymbol =
+    businessInfo?.currency === "NGN"
+      ? "₦"
+      : businessInfo?.currency || storeData?.results?.info?.currency || "₦";
+
+  const baseServicePrice = selectedService ? parseFloat(selectedService.amount) || 0 : 0;
+
+  // Minimum deposit set by the business. The customer may pay more, up to
+  // the full service price.
+  const configuredMinDeposit = Number.parseFloat(
+    serviceDetail?.payment_options?.min_deposit_amount ??
+      serviceDetail?.payment_options?.effective_deposit_amount ??
+      serviceDetail?.payment_options?.deposit_amount ??
+      selectedService?.min_deposit_amount ??
+      selectedService?.deposit_amount ??
+      "",
+  );
+  const minDepositAmount = Number.isFinite(configuredMinDeposit)
+    ? configuredMinDeposit
+    : baseServicePrice / 2;
+  const minDepositPercentage =
+    serviceDetail?.payment_options?.min_deposit_percentage ??
+    selectedService?.min_deposit_percentage ??
+    null;
+
+  const enteredDeposit = Number.parseFloat(depositInput);
+  // Compare in kobo so 3000 vs "3000.00" or float noise never fails validation.
+  const toMinor = (value: number) => Math.round(value * 100);
+  const depositError =
+    paymentOption !== "DEPOSIT"
+      ? null
+      : !Number.isFinite(enteredDeposit)
+        ? "Enter the amount you want to deposit."
+        : toMinor(enteredDeposit) < toMinor(minDepositAmount)
+          ? `Deposit must be at least ${formatCurrency(minDepositAmount, currencySymbol)}.`
+          : toMinor(enteredDeposit) > toMinor(baseServicePrice)
+            ? `Deposit can't be more than the service price (${formatCurrency(baseServicePrice, currencySymbol)}).`
+            : null;
+  const depositPrice =
+    paymentOption === "DEPOSIT"
+      ? Number.isFinite(enteredDeposit)
+        ? enteredDeposit
+        : minDepositAmount
+      : 0;
+
+  // Pre-fill the deposit input with the minimum for the selected service.
+  useEffect(() => {
+    if (!selectedService) return;
+    setDepositInput(String(minDepositAmount));
+  }, [selectedService?.id, minDepositAmount]);
+
+  const paymentChannels: ("CARD" | "BANK-TRANSFER" | "BNPL")[] = serviceDetail?.payment_options?.channels
+    ? serviceDetail.payment_options.channels.filter(
+        (channel): channel is "CARD" | "BANK-TRANSFER" | "BNPL" =>
+            channel === "CARD" ||
+            channel === "BANK-TRANSFER" ||
+            channel === "BNPL",
+      )
+    : (["CARD", "BANK-TRANSFER", "BNPL"] as const);
+  const paymentOptions = serviceDetail?.payment_options;
+  const hasEnabledPaymentOption = Boolean(
+    paymentOptions?.allow_full_payment ||
+      paymentOptions?.allow_deposit ||
+      paymentOptions?.allow_pay_at_business,
+  );
+  const hasAvailablePaymentMethod =
+    paymentOption === "PAY_AT_BUSINESS" || paymentChannels.length > 0;
+
+  const payableOnlineBase =
+    paymentOption === "FULL_PAYMENT"
+      ? baseServicePrice
+      : paymentOption === "DEPOSIT"
+        ? depositPrice
+        : 0;
+
+  const balanceDueLater =
+    paymentOption === "PAY_AT_BUSINESS"
+      ? baseServicePrice
+      : paymentOption === "DEPOSIT"
+        ? Math.max(0, baseServicePrice - depositPrice)
+        : 0;
+
+  const businessAbsorbsCharges =
+    businessInfo?.pay_transaction_charges === true ||
+    storeData?.results?.info?.pay_transaction_charges === true;
+
+  const { charges: estimatedCharges, totalPayable: estimatedTotalPayable } = useMemo(() => {
+    return calculateServiceCharges(
+      payableOnlineBase,
+      paymentOption === "PAY_AT_BUSINESS" ? "PAY_AT_BUSINESS" : paymentMethod,
+      businessAbsorbsCharges,
+    );
+  }, [payableOnlineBase, paymentOption, paymentMethod, businessAbsorbsCharges]);
+
+  // Form validations
+  const canContinueToCustomer = Boolean(selectedSlot && selectedDate);
+  const canContinueToPayment = Boolean(
+    customer.name.trim().length > 1 &&
+      (customer.phone.trim().length >= 8 || customer.email.trim().includes("@")),
   );
 
-  const handlePayment = () => {
-    goToStep(4);
+  // Booking Hold & Payment Submission
+  const handleProceedBookingHold = async () => {
+    if (!selectedService || !selectedSlot) return;
+
+    const paymentOptions = serviceDetail?.payment_options;
+    if (
+      !paymentOptions ||
+      (paymentOption === "FULL_PAYMENT" && !paymentOptions.allow_full_payment) ||
+      (paymentOption === "DEPOSIT" && !paymentOptions.allow_deposit) ||
+      (paymentOption === "PAY_AT_BUSINESS" &&
+        !paymentOptions.allow_pay_at_business)
+    ) {
+      toast.error("This payment option is not available for this service.");
+      return;
+    }
+
+    if (depositError) {
+      toast.warn(depositError);
+      return;
+    }
+
+    if (
+      paymentOption !== "PAY_AT_BUSINESS" &&
+      !paymentChannels.includes(paymentMethod as "CARD" | "BANK-TRANSFER" | "BNPL")
+    ) {
+      toast.error("This payment method is not available for this service.");
+      return;
+    }
+
+    if (
+      paymentOption !== "PAY_AT_BUSINESS" &&
+      paymentMethod === "CARD" &&
+      (!cardDetails.cardNumber || !cardDetails.expiryDate || !cardDetails.cvv)
+    ) {
+      toast.warn("Please enter all required card details.");
+      return;
+    }
+
+    if (
+      paymentOption !== "PAY_AT_BUSINESS" &&
+      paymentMethod === "BNPL" &&
+      (!akawopayPin ||
+        akawopayPin.length < 4 ||
+        !isValidAkawopayPhone(customer.phone))
+    ) {
+      toast.warn("Enter a valid Akawopay phone number and 4 to 6 digit PIN.");
+      return;
+    }
+
+    setIsSubmittingBooking(true);
+    setIsHoldExpired(false);
+
+    const payload: CreateBookingHoldPayload = {
+      customer_name: customer.name.trim(),
+      customer_phone: customer.phone.trim() || undefined,
+      customer_email: customer.email.trim() || undefined,
+      booking_date: selectedDate,
+      start_time: selectedSlot.start_time,
+      payment_option: paymentOption,
+      deposit_amount:
+        paymentOption === "DEPOSIT"
+          ? toMinor(enteredDeposit) / 100
+          : undefined,
+      payment_method: paymentOption === "PAY_AT_BUSINESS" ? undefined : paymentMethod,
+      notes: customer.notes.trim() || undefined,
+    };
+
+    if (paymentOption !== "PAY_AT_BUSINESS") {
+      if (paymentMethod === "CARD") {
+        payload.card_number = cardDetails.cardNumber.replace(/\s/g, "");
+        payload.expiry_date = cardDetails.expiryDate;
+        payload.cvv = cardDetails.cvv;
+        if (cardDetails.cardPin) payload.card_pin = cardDetails.cardPin;
+      } else if (paymentMethod === "BNPL") {
+        payload.payment_pin = akawopayPin;
+      }
+    }
+
+    try {
+      const response = await createBookingHold(target, selectedService.id, payload);
+      setBookingHold(response.booking);
+
+      const accounts =
+        response.payment?.bank_accounts || response.bank_accounts || [];
+      setVirtualAccounts(accounts);
+
+      if (
+        paymentOption === "PAY_AT_BUSINESS" ||
+        response.booking.status === "CONFIRMED" ||
+        response.payment?.status === "CONFIRMED"
+      ) {
+        toast.success(response.message || "Booking reserved successfully!");
+        goToStep(5);
+      } else if (response.payment?.method === "BANK-TRANSFER") {
+        toast.info("Booking slot reserved. Transfer funds to confirm.");
+        goToStep(4);
+      } else if (response.payment?.status === "OTP_REQUIRED") {
+        setShowOtpModal(true);
+      } else if (
+        response.payment?.status === "REDIRECT_REQUIRED" &&
+        response.payment?.redirect_html
+      ) {
+        setThreeDsRedirectHtml(response.payment.redirect_html);
+        setShowThreeDsModal(true);
+      } else if (response.payment?.method === "BNPL") {
+        toast.info("Authorizing Buy Now, Pay Later with Akawopay...");
+        const pollResult = await pollBookingPaymentVerification(
+          target,
+          response.booking.reference,
+          { timeoutMs: 90_000 },
+        );
+        if (pollResult.outcome === "CONFIRMED") {
+          toast.success("BNPL Payment approved! Booking confirmed.");
+          goToStep(5);
+        } else if (pollResult.outcome === "EXPIRED") {
+          toast.error("Booking hold expired before authorization completed.");
+          setIsHoldExpired(true);
+        } else if (pollResult.outcome === "FAILED") {
+          toast.error(
+            pollResult.response?.message || "BNPL authorization was declined.",
+          );
+        } else {
+          toast.error("BNPL authorization timed out. Please try again.");
+        }
+      } else {
+        toast.info(response.message || "Booking hold created.");
+        goToStep(4);
+      }
+    } catch (err) {
+      toast.error(
+        getErrorMessage(
+          err,
+          "Failed to reserve appointment. Please try again.",
+        ),
+      );
+    } finally {
+      setIsSubmittingBooking(false);
+    }
+  };
+
+  // OTP Verification for Card Charges
+  const handleVerifyOtp = async (otp: string) => {
+    if (!bookingHold) return;
+    setIsVerifyingOtp(true);
+    try {
+      const res = await verifyBookingPayment(target, bookingHold.reference, { otp });
+      if (res.status === "CONFIRMED") {
+        setShowOtpModal(false);
+        toast.success("Card payment verified successfully!");
+        goToStep(5);
+      } else if (res.status === "EXPIRED") {
+        setShowOtpModal(false);
+        toast.error("Booking hold expired before OTP verification.");
+        setIsHoldExpired(true);
+      } else {
+        toast.error(res.message || "Invalid OTP code. Please try again.");
+      }
+    } catch (err) {
+      toast.error(getErrorMessage(err, "OTP verification failed."));
+    } finally {
+      setIsVerifyingOtp(false);
+    }
   };
 
   return (
-    <div
-      className="min-h-screen bg-[#f3f7f4] text-[#17221b]"
-      style={themeVars}
-    >
-      {step === 0 ? (
+    <div className="flex flex-col min-h-screen bg-white" style={themeVars}>
+      {/* Universal Navbar */}
+      <Navbar
+        storeData={storeData}
+        categories={serviceCategories}
+        selectedCategoryId={selectedCategory}
+        onCategoryChange={(catId) => {
+          setSelectedCategory(catId);
+          setActiveTab("book");
+        }}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onCheckout={() => {}}
+      />
+
+      {/* Sub-navigation bar with Services Catalog & Lookup My Booking */}
+      <div className="border-b border-gray-100 bg-white/95 sticky top-0 z-20 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-13">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (step !== 0 || activeTab !== "book") {
+                  returnToCatalog();
+                } else {
+                  setActiveTab("book");
+                }
+              }}
+              className={`px-3.5 sm:px-4 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition ${
+                activeTab === "book"
+                  ? "bg-[var(--brand-primary)] text-[var(--brand-on-primary)] shadow-sm"
+                  : "text-gray-600 hover:text-black hover:bg-gray-100"
+              }`}
+            >
+              {step > 0 && activeTab === "book" ? "← Back to Catalog" : "Services Catalog"}
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("lookup");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className={`inline-flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition shadow-xs ${
+                activeTab === "lookup"
+                  ? "bg-[var(--brand-primary)] text-[var(--brand-on-primary)] shadow-sm"
+                  : "border border-gray-300 bg-white text-gray-700 hover:text-black hover:border-black"
+              }`}
+            >
+              <svg
+                className="w-3.5 h-3.5 pointer-events-none"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+              <span>Lookup My Booking</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {activeTab === "lookup" ? (
+        /* Customer Self-Service Portal */
+        <main className="flex-1 bg-[#f9faf9] py-10 sm:py-14">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <ServiceSelfServicePortal
+              target={target}
+              initialReference={urlReference || ""}
+              currencySymbol={currencySymbol}
+              onBackToBooking={returnToCatalog}
+            />
+          </div>
+        </main>
+      ) : step === 0 ? (
+        /* Catalog View with Hero Banner */
         <>
-          <header className="bg-[#173d2b] text-white">
-            <div className="mx-auto flex max-w-6xl items-center gap-3 px-5 py-4 sm:px-8">
-              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#2d9765] text-sm font-extrabold">
-                TG
-              </span>
-              <div>
-                <h1 className="font-bold">{storeName}</h1>
-                <p className="text-xs text-white/75">
-                  {storeLocation} <span className="ml-1 text-amber-300">★★★★★</span>
-                  <span className="ml-1">4.9</span>
+          {/* Hero Banner matching Outstore.tsx */}
+          <div className="relative text-white overflow-hidden">
+            <div className="absolute inset-0">
+              {(!bannerLoaded || loadedBannerImage !== bannerImage) && (
+                <div className="w-full h-full bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 animate-pulse" />
+              )}
+
+              {bannerImage && (
+                <img
+                  key={bannerImage}
+                  src={bannerImage}
+                  alt="Services background"
+                  fetchPriority="high"
+                  decoding="async"
+                  className={`w-full h-full object-cover transition-opacity duration-700 ${
+                    bannerLoaded && loadedBannerImage === bannerImage
+                      ? "opacity-100"
+                      : "opacity-0"
+                  }`}
+                  onLoad={() => {
+                    setLoadedBannerImage(bannerImage);
+                    setBannerLoaded(true);
+                  }}
+                />
+              )}
+              <div className="absolute inset-0 bg-black/55" />
+            </div>
+
+            <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24 lg:py-28">
+              <div className="max-w-3xl">
+                <h1 className="font-display text-4xl sm:text-6xl lg:text-7xl uppercase leading-[1.05] mb-5 text-white">
+                  Discover Our Services
+                </h1>
+                <p className="text-base sm:text-lg text-white/90 max-w-xl">
+                  {storeData?.results?.info.description ||
+                    "                    Browse our services, choose an available appointment slot, and book online."}
                 </p>
               </div>
             </div>
-          </header>
 
-          <div className="border-b border-[#e7ece8] bg-white">
-            <div className="mx-auto max-w-6xl px-5 py-4 sm:px-8">
-              <p className="text-sm text-[#66736b]">
-                Premium grooming and barbershop services for men.
-              </p>
-              <p className="mt-1 text-xs font-medium text-[#278e5b]">
-                ◉ sync360.africa/store/{slug}
-              </p>
+            {/* Stats Strip matching Outstore.tsx */}
+            <div className="relative bg-[var(--brand-primary)] border-t border-white/10">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
+                <div className="grid grid-cols-3 gap-2 sm:gap-8 divide-x divide-white/15">
+                  <div className="text-center sm:text-left sm:pl-2">
+                    <p className="font-display text-xl sm:text-4xl text-[var(--brand-on-primary)]">
+                      {services.length}+
+                    </p>
+                    <p className="text-[10px] sm:text-sm text-[var(--brand-on-primary)]/80 mt-0.5">
+                      Services Available
+                    </p>
+                  </div>
+                  <div className="text-center sm:text-left pl-2 sm:pl-6">
+                    <p className="font-display text-xl sm:text-4xl text-[var(--brand-on-primary)]">
+                      {serviceCategories.length > 0
+                        ? `${serviceCategories.length}+`
+                        : "All"}
+                    </p>
+                    <p className="text-[10px] sm:text-sm text-[var(--brand-on-primary)]/80 mt-0.5">
+                      Categories
+                    </p>
+                  </div>
+                  <div className="text-center sm:text-left pl-2 sm:pl-6">
+                    <p className="font-display text-xl sm:text-4xl text-[var(--brand-on-primary)]">
+                      24/7
+                    </p>
+                    <p className="text-[10px] sm:text-sm text-[var(--brand-on-primary)]/80 mt-0.5">
+                      Online Booking
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <main className="mx-auto max-w-6xl px-5 py-7 sm:px-8 sm:py-10">
-            <section className="mx-auto max-w-3xl">
-              <h2 className="mb-5 text-lg font-extrabold">Our Services</h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {SERVICES.map((service) => (
-                  <article
-                    key={service.id}
-                    className="overflow-hidden rounded-2xl border border-[#e7ece8] bg-white shadow-sm"
+          {/* Catalog Section matching ProductList layout */}
+          <main id="services-catalog" className="flex-1 bg-white">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16 space-y-8 sm:space-y-12">
+              {/* Section Title & Lookup Action */}
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-2 border-b border-gray-100">
+                <div>
+                  <h2 className="font-display text-3xl sm:text-5xl text-[var(--brand-primary)] uppercase tracking-wide mb-1">
+                    {selectedCategoryName || "Available Services"}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-gray-500">
+                    {services.length > 0
+                      ? `Showing ${services.length} ${services.length === 1 ? "service" : "services"} ready for booking`
+                      : "Discover our services"}
+                    {searchQuery && (
+                      <span className="ml-1 text-gray-400">· "{searchQuery}"</span>
+                    )}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab("lookup");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="self-start sm:self-auto inline-flex items-center gap-1.5 sm:gap-2 px-4 py-2 rounded-full text-xs font-semibold border border-gray-300 bg-white text-gray-700 hover:text-black hover:border-black cursor-pointer shadow-xs transition"
+                >
+                  <svg
+                    className="w-4 h-4 text-gray-500 pointer-events-none"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
                   >
-                    <div
-                      className="relative flex h-28 items-center justify-center"
-                      style={{ backgroundColor: service.color }}
-                    >
-                      <span className="absolute right-2 top-2 rounded-full bg-white/85 px-2.5 py-1 text-[10px] font-medium text-[#4c5951]">
-                        ◷ {service.duration >= 60 ? `${service.duration / 60} hour${service.duration > 60 ? "s" : ""}` : `${service.duration} minutes`}
-                      </span>
-                      <span className="text-2xl font-extrabold tracking-wide text-[#102d20]">
-                        {service.initials}
-                      </span>
-                    </div>
-                    <div className="p-4">
-                      <h3 className="text-sm font-bold">{service.name}</h3>
-                      <p className="mt-1 min-h-9 text-xs leading-5 text-[#77827b]">
-                        {service.description}
-                      </p>
-                      <div className="mt-3 flex items-center justify-between gap-2">
-                        <span className="font-extrabold text-[#278e5b]">
-                          {formatCurrency(service.price, currency)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => startBooking(service)}
-                          className="rounded-lg bg-[#2d9765] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#247e53]"
-                        >
-                          Book Now
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                ))}
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                  <span>Lookup My Booking</span>
+                </button>
               </div>
-            </section>
-            <p className="mx-auto mt-8 max-w-3xl text-center text-xs text-[#8a948e]">
-              Preview booking flow — services, appointments, and payments shown
-              here are sample data.
-            </p>
+
+              {/* Category Pills - responsive horizontal scroll on mobile, centered flex-wrap on desktop */}
+              {serviceCategories.length > 0 && (
+                <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none sm:flex-wrap sm:justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategory(null)}
+                    className={`shrink-0 px-4 py-2 rounded-full text-xs font-semibold cursor-pointer transition ${
+                      selectedCategory === null
+                        ? "bg-[var(--brand-primary)] text-[var(--brand-on-primary)] shadow-sm"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    All Services
+                  </button>
+                  {serviceCategories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setSelectedCategory(cat.id)}
+                      className={`shrink-0 px-4 py-2 rounded-full text-xs font-semibold cursor-pointer transition ${
+                        selectedCategory === cat.id
+                          ? "bg-[var(--brand-primary)] text-[var(--brand-on-primary)] shadow-sm"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Grid matching ProductList */}
+              {isLoadingServices ? (
+                <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-8">
+                  {[...Array(8)].map((_, i) => (
+                    <ProductCardSkeleton key={i} />
+                  ))}
+                </div>
+              ) : services.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-gray-300 bg-gray-50/50 p-12 text-center max-w-lg mx-auto">
+                  <p className="font-display text-2xl uppercase tracking-wide text-gray-700">
+                    No Services Found
+                  </p>
+                  <p className="mt-2 text-xs text-gray-500 leading-relaxed">
+                    {searchQuery || selectedCategory
+                      ? "Try searching for a different keyword or resetting your category filter."
+                      : "This store currently has no active services listed for booking."}
+                  </p>
+                  {(searchQuery || selectedCategory) && (
+                    <button
+                      type="button"
+                      onClick={returnToCatalog}
+                      className="mt-4 px-6 py-2.5 rounded-full bg-black text-white text-xs font-semibold hover:bg-gray-800 transition"
+                    >
+                      Reset Filters
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-8">
+                  {services.map((service) => (
+                    <ServiceCard
+                      key={service.id}
+                      service={service}
+                      currency={currencySymbol}
+                      onBook={startBooking}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </main>
         </>
       ) : (
-        <>
-          <header className="border-b border-[#e7ece8] bg-white">
-            <div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-5 sm:px-8">
-              {step < 4 && (
-                <button
-                  type="button"
-                  onClick={() => goToStep(step === 1 ? 0 : step - 1)}
-                  aria-label="Go back"
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#d5ddd7] text-[#59675f] hover:bg-[#f3f7f4]"
-                >
-                  ←
-                </button>
-              )}
-              <div>
-                <h1 className="text-xl font-extrabold sm:text-2xl">{pageTitle}</h1>
-                <p className="mt-1 text-xs text-[#77827b]">{storeName} · {storeLocation}</p>
-              </div>
-            </div>
-          </header>
-
-          <main className="mx-auto grid max-w-5xl gap-5 px-4 py-6 sm:px-8 sm:py-8 lg:grid-cols-[minmax(0,1fr)_300px]">
-            <section className="min-w-0 space-y-4">
-              {step === 1 && (
-                <>
-                  {summary}
-                  <div className="rounded-2xl border border-[#e7ece8] bg-white p-4 sm:p-5">
-                    <h2 className="mb-4 text-sm font-bold">Choose a Date</h2>
-                    <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-                      {dates.map((date) => {
-                        const key = localDateKey(date);
-                        const isSelected = selectedDate === key;
-                        return (
-                          <button
-                            key={key}
-                            type="button"
-                            onClick={() => setSelectedDate(key)}
-                            aria-pressed={isSelected}
-                            className={`rounded-xl border px-1 py-3 text-center transition ${
-                              isSelected
-                                ? "border-[#2d9765] bg-[#2d9765] text-white"
-                                : "border-[#d8dfda] text-[#46534b] hover:border-[#2d9765]"
-                            }`}
-                          >
-                            <span className="block text-[10px] font-semibold uppercase">
-                              {new Intl.DateTimeFormat("en", { weekday: "short" }).format(date)}
-                            </span>
-                            <span className="mt-1 block text-base font-extrabold">
-                              {date.getDate()}
-                            </span>
-                          </button>
-                        );
-                      })}
+        /* Booking Steps 1 to 5 */
+        <main className="flex-1 bg-[#f9faf9] py-8 sm:py-12">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+              <section className="space-y-6">
+                {/* Header with Back button */}
+                <div className="flex items-center justify-between border-b border-gray-200 pb-4">
+                  <div className="flex items-center gap-3">
+                    {step > 1 && step < 5 && (
+                      <button
+                        type="button"
+                        onClick={() => goToStep(step - 1)}
+                        className="rounded-full border border-gray-300 p-2 text-xs text-gray-700 hover:bg-gray-100 transition"
+                      >
+                        ← Back
+                      </button>
+                    )}
+                    {step === 1 && (
+                      <button
+                        type="button"
+                        onClick={returnToCatalog}
+                        className="rounded-full border border-gray-300 p-2 text-xs text-gray-700 hover:bg-gray-100 transition"
+                      >
+                        ← All Services
+                      </button>
+                    )}
+                    <div>
+                      <h2 className="font-display text-2xl sm:text-3xl uppercase tracking-wide text-gray-900">
+                        {step === 1 && "Select Appointment Slot"}
+                        {step === 2 && "Customer Information"}
+                        {step === 3 && "Payment & Review"}
+                        {step === 4 && "Bank Transfer Payment"}
+                        {step === 5 && "Appointment Confirmed"}
+                      </h2>
+                      <p className="text-xs text-gray-500">
+                        {step < 5
+                          ? `Step ${step} of 4 · ${selectedService?.name}`
+                          : "Your booking reservation is complete"}
+                      </p>
                     </div>
                   </div>
+                </div>
 
-                  <div className="rounded-2xl border border-[#e7ece8] bg-white p-4 sm:p-5">
-                    <h2 className="mb-4 text-sm font-bold">Choose a Time</h2>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                      {TIME_SLOTS.map((time, index) => {
-                        const isSelected = selectedTime === time;
-                        const isUnavailable = index === TIME_SLOTS.length - 1;
-                        return (
-                          <button
-                            key={time}
-                            type="button"
-                            disabled={isUnavailable}
-                            onClick={() => setSelectedTime(time)}
-                            aria-pressed={isSelected}
-                            className={`rounded-xl border px-2 py-2.5 text-xs font-semibold transition ${
-                              isUnavailable
-                                ? "cursor-not-allowed border-[#e0e4e1] bg-[#f3f4f3] text-[#a9b0ab] line-through"
-                                : isSelected
-                                  ? "border-[#2d9765] bg-[#e9f6ed] text-[#237a4f]"
-                                  : "border-[#d8dfda] bg-white hover:border-[#2d9765]"
-                            }`}
-                          >
-                            {time}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={!canContinueToDetails}
-                    onClick={() => goToStep(2)}
-                    className="w-full rounded-lg bg-[#2d9765] px-4 py-3.5 text-sm font-bold text-white transition hover:bg-[#247e53] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Continue <span aria-hidden="true">→</span>
-                  </button>
-                </>
-              )}
-
-              {step === 2 && (
-                <>
-                  <form
-                    id="customer-details"
-                    className="space-y-4 rounded-2xl border border-[#e7ece8] bg-white p-5 sm:p-6"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      if (canContinueToPayment) goToStep(3);
-                    }}
-                  >
-                    {(
-                      [
-                        ["name", "Full Name", "e.g. Adaeze Okonkwo", "text"],
-                        ["phone", "Phone Number", "e.g. 0803 123 4567", "tel"],
-                        ["email", "Email Address", "e.g. adaeze@gmail.com", "email"],
-                      ] as const
-                    ).map(([field, label, placeholder, type]) => (
-                      <label key={field} className="block text-xs font-medium text-[#344139]">
-                        {label}
-                        <input
-                          required
-                          type={type}
-                          value={customer[field]}
-                          onChange={(event) => updateCustomer(field, event.target.value)}
-                          placeholder={placeholder}
-                          className="mt-1.5 w-full rounded-lg border border-[#d2dad4] px-3 py-2.5 text-sm outline-none placeholder:text-[#a0aaa3] focus:border-[#2d9765] focus:ring-2 focus:ring-[#2d9765]/15"
-                        />
-                      </label>
-                    ))}
-                    <label className="block text-xs font-medium text-[#344139]">
-                      Notes (Optional)
-                      <textarea
-                        rows={3}
-                        value={customer.notes}
-                        onChange={(event) => updateCustomer("notes", event.target.value)}
-                        placeholder="e.g. Please keep my usual haircut style."
-                        className="mt-1.5 w-full resize-y rounded-lg border border-[#d2dad4] px-3 py-2.5 text-sm outline-none placeholder:text-[#a0aaa3] focus:border-[#2d9765] focus:ring-2 focus:ring-[#2d9765]/15"
-                      />
-                    </label>
-                    <button
-                      type="submit"
-                      disabled={!canContinueToPayment}
-                      className="w-full rounded-lg bg-[#2d9765] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#247e53] disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Continue to Payment <span aria-hidden="true">→</span>
-                    </button>
-                  </form>
-                  <div className="lg:hidden">{summary}</div>
-                </>
-              )}
-
-              {step === 3 && selectedService && (
-                <>
-                  <div className="rounded-2xl border border-[#e7ece8] border-t-4 border-t-[#2d9765] bg-white p-5">
-                    <div className="flex items-center gap-3 border-b border-[#edf0ee] pb-4">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#e8f6ed] text-xs font-extrabold text-[#278e5b]">
-                        TG
-                      </span>
-                      <div>
-                        <p className="text-sm font-bold">{storeName}</p>
-                        <p className="text-xs text-[#77827b]">{storeLocation}</p>
-                      </div>
-                    </div>
-                    <div className="space-y-3 py-4 text-sm">
-                      <div className="flex justify-between gap-4">
-                        <span className="text-[#77827b]">Service</span>
-                        <span className="font-semibold">{selectedService.name}</span>
-                      </div>
-                      <div className="flex justify-between gap-4">
-                        <span className="text-[#77827b]">Date</span>
-                        <span className="text-right font-semibold">
-                          {dateLabel(selectedDate, {
-                            weekday: "long",
-                            month: "long",
+                {/* Step 1: Date & Dynamic Slots Picker */}
+                {step === 1 && selectedService && (
+                  <div className="space-y-6">
+                    {/* Date Picker */}
+                    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">
+                          Select Date
+                        </h3>
+                        <span className="text-xs font-semibold text-[var(--brand-primary)]">
+                          {new Intl.DateTimeFormat("en-NG", {
+                            weekday: "short",
+                            month: "short",
                             day: "numeric",
-                          })}
+                          }).format(new Date(`${selectedDate}T12:00:00`))}
                         </span>
                       </div>
-                      <div className="flex justify-between gap-4">
-                        <span className="text-[#77827b]">Time</span>
-                        <span className="font-semibold">
-                          {selectedTime} ({selectedService.duration} minutes)
-                        </span>
-                      </div>
-                      <div className="flex justify-between gap-4">
-                        <span className="text-[#77827b]">Customer</span>
-                        <span className="font-semibold">{customer.name}</span>
-                      </div>
-                    </div>
-                    <div className="flex justify-between border-t border-[#edf0ee] pt-4">
-                      <span className="font-bold">Total</span>
-                      <span className="text-lg font-extrabold text-[#278e5b]">
-                        {formatCurrency(selectedService.price, currency)}
-                      </span>
-                    </div>
-                  </div>
 
-                  <div className="rounded-2xl border border-[#e7ece8] bg-white p-5">
-                    <h2 className="mb-1 text-sm font-bold">Pay Securely</h2>
-                    <p className="mb-4 text-xs text-[#77827b]">
-                      Choose how you’d like to pay. This is a preview; no payment will be processed.
-                    </p>
-                    <div className="space-y-2">
-                      {PAYMENT_METHODS.map((method) => {
-                        const isSelected = selectedPayment === method.value;
-                        return (
+                      <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+                        {calendarDates.map((date) => {
+                          const key = localDateKey(date);
+                          const isSelected = selectedDate === key;
+                          const closed = isDateClosed(date);
+
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              disabled={closed}
+                              onClick={() => setSelectedDate(key)}
+                              className={`flex flex-col items-center justify-center rounded-2xl border py-3 transition text-xs font-semibold ${
+                                closed
+                                  ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400 opacity-60"
+                                  : isSelected
+                                    ? "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-[var(--brand-on-primary)] shadow-md"
+                                    : "border-gray-200 bg-white hover:border-[var(--brand-primary)] text-gray-800"
+                              }`}
+                            >
+                              <span className="text-[10px] uppercase">
+                                {new Intl.DateTimeFormat("en", { weekday: "short" }).format(date)}
+                              </span>
+                              <span className="text-base font-extrabold mt-0.5">
+                                {date.getDate()}
+                              </span>
+                              {closed && (
+                                <span className="text-[9px] text-red-500 font-bold mt-0.5">
+                                  Closed
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Available Time Slots */}
+                    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">
+                        Available Slots
+                      </h3>
+
+                      {isLoadingSlots ? (
+                        <div className="py-10 text-center text-xs text-gray-500 animate-pulse">
+                          Fetching available slots from calendar...
+                        </div>
+                      ) : !serviceDetail?.available_slots ||
+                        serviceDetail.available_slots.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-xs text-gray-500">
+                          No available slots for this date. Please select a different date.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                          {serviceDetail.available_slots.map((slot) => {
+                            const isSelected = selectedSlot?.start_time === slot.start_time;
+                            const isFull = slot.remaining_capacity === 0;
+
+                            return (
+                              <button
+                                key={slot.start_time}
+                                type="button"
+                                disabled={isFull}
+                                onClick={() => setSelectedSlot(slot)}
+                                className={`rounded-2xl border p-3 text-center transition text-xs font-semibold ${
+                                  isFull
+                                    ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400 line-through"
+                                    : isSelected
+                                      ? "border-[var(--brand-primary)] bg-[var(--brand-surface)] text-[var(--brand-primary)] ring-2 ring-[var(--brand-primary)] shadow-sm"
+                                      : "border-gray-200 bg-white hover:border-[var(--brand-primary)] text-gray-800"
+                                }`}
+                              >
+                                <div className="text-sm font-bold">
+                                  {slot.display || slot.start_time}
+                                </div>
+                                <div className="text-[10px] font-normal text-gray-500 mt-0.5">
+                                  {isFull
+                                    ? "Fully Booked"
+                                    : `${slot.remaining_capacity} spot${slot.remaining_capacity > 1 ? "s" : ""} left`}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Policy Banner */}
+                    {serviceDetail?.booking_rules?.cancellation_policy_text && (
+                      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-xs text-gray-700">
+                        <strong>Policy:</strong> {serviceDetail.booking_rules.cancellation_policy_text}
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      disabled={!canContinueToCustomer}
+                      onClick={() => goToStep(2)}
+                      className="w-full rounded-full bg-[var(--brand-primary)] text-[var(--brand-on-primary)] py-4 text-sm font-semibold shadow hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Continue to Details →
+                    </button>
+                  </div>
+                )}
+
+                {/* Step 2: Customer Details */}
+                {step === 2 && (
+                  <div className="space-y-5 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                    <div>
+                      <h3 className="text-base font-bold text-gray-900">Your Contact Details</h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Your appointment confirmation and reminder will be delivered here.
+                      </p>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          Full Name *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Adaeze Okonkwo"
+                          value={customer.name}
+                          onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
+                          className="w-full rounded-full border border-gray-300 bg-[#f0f0f0] px-4 py-3 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-black/10"
+                        />
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">
+                            Phone Number *
+                          </label>
+                          <input
+                            type="tel"
+                            placeholder="e.g. 0803 123 4567"
+                            value={customer.phone}
+                            onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
+                            className="w-full rounded-full border border-gray-300 bg-[#f0f0f0] px-4 py-3 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-black/10"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">
+                            Email Address *
+                          </label>
+                          <input
+                            type="email"
+                            placeholder="e.g. adaeze@example.com"
+                            value={customer.email}
+                            onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
+                            className="w-full rounded-full border border-gray-300 bg-[#f0f0f0] px-4 py-3 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-black/10"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          Special Requests or Notes (Optional)
+                        </label>
+                        <textarea
+                          rows={3}
+                          placeholder="Tell your specialist any preferences or styling requests..."
+                          value={customer.notes}
+                          onChange={(e) => setCustomer({ ...customer, notes: e.target.value })}
+                          className="w-full rounded-2xl border border-gray-300 bg-[#f0f0f0] p-3 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-black/10"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={!canContinueToPayment}
+                      onClick={() => goToStep(3)}
+                      className="w-full rounded-full bg-[var(--brand-primary)] text-[var(--brand-on-primary)] py-4 text-sm font-semibold shadow hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Proceed to Payment →
+                    </button>
+                  </div>
+                )}
+
+                {/* Step 3: Payment Selection & Breakdown */}
+                {step === 3 && selectedService && (
+                  <div className="space-y-6">
+                    {/* Payment Option Selector */}
+                    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-3">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">
+                        Payment Option
+                      </h3>
+
+                      <div className="grid gap-2.5 sm:grid-cols-3">
+                        {serviceDetail?.payment_options?.allow_full_payment && (
                           <button
-                            key={method.value}
                             type="button"
-                            onClick={() => setSelectedPayment(method.value)}
-                            aria-pressed={isSelected}
-                            className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${
-                              isSelected
-                                ? "border-[#2d9765] bg-[#f1faf4] ring-1 ring-[#2d9765]"
-                                : "border-[#dce3de] hover:border-[#9ebbaa]"
+                            onClick={() => setPaymentOption("FULL_PAYMENT")}
+                            className={`rounded-2xl border p-3.5 text-left transition text-xs font-semibold ${
+                              paymentOption === "FULL_PAYMENT"
+                                ? "border-[var(--brand-primary)] bg-[var(--brand-surface)] text-[var(--brand-primary)] ring-2 ring-[var(--brand-primary)]"
+                                : "border-gray-200 hover:border-gray-400"
                             }`}
                           >
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-[#278e5b]">
-                              <StepIcon path={method.icon} />
+                            <div className="font-bold text-sm">Full Payment</div>
+                            <div className="text-[11px] text-gray-500 mt-0.5">
+                              {formatCurrency(baseServicePrice, currencySymbol)}
+                            </div>
+                          </button>
+                        )}
+
+                        {serviceDetail?.payment_options?.allow_deposit && (
+                          <button
+                            type="button"
+                            onClick={() => setPaymentOption("DEPOSIT")}
+                            className={`rounded-2xl border p-3.5 text-left transition text-xs font-semibold ${
+                              paymentOption === "DEPOSIT"
+                                ? "border-[var(--brand-primary)] bg-[var(--brand-surface)] text-[var(--brand-primary)] ring-2 ring-[var(--brand-primary)]"
+                                : "border-gray-200 hover:border-gray-400"
+                            }`}
+                          >
+                            <div className="font-bold text-sm">Pay Deposit</div>
+                            <div className="text-[11px] text-gray-500 mt-0.5">
+                              From {formatCurrency(minDepositAmount, currencySymbol)} now
+                            </div>
+                          </button>
+                        )}
+
+                        {serviceDetail?.payment_options?.allow_pay_at_business && (
+                          <button
+                            type="button"
+                            onClick={() => setPaymentOption("PAY_AT_BUSINESS")}
+                            className={`rounded-2xl border p-3.5 text-left transition text-xs font-semibold ${
+                              paymentOption === "PAY_AT_BUSINESS"
+                                ? "border-[var(--brand-primary)] bg-[var(--brand-surface)] text-[var(--brand-primary)] ring-2 ring-[var(--brand-primary)]"
+                                : "border-gray-200 hover:border-gray-400"
+                            }`}
+                          >
+                            <div className="font-bold text-sm">Pay at Business</div>
+                            <div className="text-[11px] text-gray-500 mt-0.5">
+                              ₦0 online (pay at venue)
+                            </div>
+                          </button>
+                        )}
+                      </div>
+                      {!hasEnabledPaymentOption && (
+                        <p className="text-xs text-amber-700">
+                          No payment options are currently available for this service. Please contact the business.
+                        </p>
+                      )}
+
+                      {/* Custom deposit amount (min deposit ≤ amount ≤ service price) */}
+                      {paymentOption === "DEPOSIT" && (
+                        <div className="rounded-xl bg-[var(--brand-surface)] border border-gray-200 p-4 space-y-2">
+                          <p className="text-xs font-semibold text-gray-800">
+                            Minimum deposit required:{" "}
+                            {minDepositPercentage != null &&
+                              `${minDepositPercentage}% `}
+                            ({formatCurrency(minDepositAmount, currencySymbol)})
+                          </p>
+                          <label
+                            htmlFor="deposit-amount"
+                            className="block text-[11px] text-gray-500"
+                          >
+                            How much would you like to deposit? (up to{" "}
+                            {formatCurrency(baseServicePrice, currencySymbol)})
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">
+                              {currencySymbol}
                             </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block text-sm font-bold">{method.label}</span>
-                              <span className="block text-xs text-[#77827b]">
-                                {method.description}
-                              </span>
-                            </span>
-                            <span
-                              className={`h-4 w-4 shrink-0 rounded-full border ${
-                                isSelected
-                                  ? "border-[5px] border-[#2d9765]"
-                                  : "border-[#cbd5ce]"
+                            <input
+                              id="deposit-amount"
+                              type="number"
+                              inputMode="decimal"
+                              min={minDepositAmount}
+                              max={baseServicePrice}
+                              step="0.01"
+                              value={depositInput}
+                              onChange={(e) => setDepositInput(e.target.value)}
+                              disabled={isSubmittingBooking}
+                              aria-invalid={Boolean(depositError)}
+                              className={`w-full rounded-full border bg-white pl-9 pr-4 py-3 text-sm font-semibold text-gray-900 outline-none transition focus:ring-2 ${
+                                depositError
+                                  ? "border-red-400 focus:ring-red-200"
+                                  : "border-gray-300 focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)]/20"
                               }`}
                             />
-                          </button>
-                        );
-                      })}
+                          </div>
+                          {depositError && (
+                            <p className="text-[11px] text-red-600">{depositError}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
 
-                    {selectedPayment === "CARD" && (
-                      <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-[#f5f8f6] p-4">
-                        <div>
-                          <p className="text-sm font-semibold text-[#344139]">
-                            Secure card checkout
-                          </p>
-                          <p className="mt-1 text-xs text-[#77827b]">
-                            Card details are entered securely with the payment provider.
-                          </p>
+                    {/* Payment Channels (If not Pay at Business) */}
+                    {paymentOption !== "PAY_AT_BUSINESS" && (
+                      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">
+                          Payment Method
+                        </h3>
+
+                        <div className="grid gap-2.5 sm:grid-cols-3">
+                          {paymentChannels.map((channel) => {
+                            const label =
+                              channel === "CARD"
+                                ? "Card"
+                                : channel === "BANK-TRANSFER"
+                                  ? "Bank Transfer"
+                                  : "Pay Later";
+                            const description =
+                              channel === "CARD"
+                                ? "Debit or Credit Card"
+                                : channel === "BANK-TRANSFER"
+                                  ? "Virtual Account"
+                                  : "Akawopay BNPL";
+                            return (
+                              <button
+                                key={channel}
+                                type="button"
+                                onClick={() => setPaymentMethod(channel)}
+                                className={`rounded-2xl border p-3.5 text-left transition text-xs font-semibold ${
+                                  paymentMethod === channel
+                                    ? "border-[var(--brand-primary)] bg-[var(--brand-surface)] text-[var(--brand-primary)] ring-2 ring-[var(--brand-primary)]"
+                                    : "border-gray-200 hover:border-gray-400"
+                                }`}
+                              >
+                                <div className="font-bold">{label}</div>
+                                <div className="text-[10px] text-gray-500 mt-0.5">
+                                  {description}
+                                </div>
+                              </button>
+                            );
+                          })}
                         </div>
-                        <span className="shrink-0 text-sm font-extrabold tracking-wide text-[#526653]">
-                          VISA · Verve
-                        </span>
+                        {paymentChannels.length === 0 && (
+                          <p className="text-xs text-amber-700">
+                            No online payment methods are currently available for this service.
+                          </p>
+                        )}
+
+                        {paymentMethod === "CARD" && (
+                          <CardPaymentForm
+                            cardDetails={cardDetails}
+                            onChange={setCardDetails}
+                            disabled={
+                              isSubmittingBooking ||
+                              !hasEnabledPaymentOption ||
+                              !hasAvailablePaymentMethod
+                            }
+                          />
+                        )}
+
+                        {paymentMethod === "BNPL" && (
+                          <PaymentPinField
+                            value={akawopayPin}
+                            onChange={setAkawopayPin}
+                            phone={customer.phone}
+                            onPhoneChange={(phone) =>
+                              setCustomer((current) => ({ ...current, phone }))
+                            }
+                            flow="in-store"
+                          />
+                        )}
                       </div>
                     )}
 
-                    {selectedPayment === "BANK-TRANSFER" && (
-                      <div className="mt-4 overflow-hidden rounded-xl border border-[#dce3de] text-sm">
-                        {[
-                          ["Bank", "VFD MicroFinance Bank"],
-                          ["Account No.", "1040800190"],
-                          ["Account Name", storeName],
-                          ["Amount", formatCurrency(selectedService.price, currency)],
-                        ].map(([label, value]) => (
-                          <div
-                            key={label}
-                            className="flex justify-between gap-3 border-b border-[#e5eae6] bg-[#fbfcfb] px-3 py-3 last:border-0"
-                          >
-                            <span className="text-xs text-[#77827b]">{label}</span>
-                            <span className="text-right text-xs font-semibold">{value}</span>
+                    {/* Transparent Financial Breakdown */}
+                    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-3">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">
+                        Financial Breakdown
+                      </h3>
+
+                      <div className="space-y-2 text-xs divide-y divide-gray-100">
+                        <div className="flex justify-between py-1.5 text-gray-600">
+                          <span>Service Price</span>
+                          <span className="font-semibold text-gray-900">
+                            {formatCurrency(baseServicePrice, currencySymbol)}
+                          </span>
+                        </div>
+
+                        {paymentOption === "DEPOSIT" && (
+                          <div className="flex justify-between py-1.5 text-gray-600">
+                            <span>Deposit Amount</span>
+                            <span className="font-semibold text-gray-900">
+                              {formatCurrency(depositPrice, currencySymbol)}
+                            </span>
                           </div>
-                        ))}
+                        )}
+
+                        <div className="flex justify-between py-1.5 text-gray-600">
+                          <span>Payment Processing Fee</span>
+                          <span className="font-semibold text-gray-900">
+                            {businessAbsorbsCharges
+                              ? "₦0.00 (Absorbed by business)"
+                              : estimatedCharges > 0
+                                ? formatCurrency(estimatedCharges, currencySymbol)
+                                : "₦0.00"}
+                          </span>
+                        </div>
+
+                        {balanceDueLater > 0 && (
+                          <div className="flex justify-between py-1.5 text-gray-600">
+                            <span>Balance Due at Venue</span>
+                            <span className="font-semibold text-amber-700">
+                              {formatCurrency(balanceDueLater, currencySymbol)}
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="flex justify-between pt-2.5 text-base font-extrabold text-[var(--brand-primary)]">
+                          <span>Payable Now</span>
+                          <span>{formatCurrency(estimatedTotalPayable, currencySymbol)}</span>
+                        </div>
                       </div>
+
+                      <div className="rounded-xl bg-gray-50 p-3 text-[11px] text-gray-500 leading-relaxed border border-gray-100">
+                        <strong>Policy:</strong> Gateway processing fees are non-refundable. If
+                        cancelled, the refundable amount to the customer is strictly the service
+                        deposit/price.
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isSubmittingBooking || Boolean(depositError)}
+                      onClick={handleProceedBookingHold}
+                      className="w-full rounded-full bg-[var(--brand-primary)] text-[var(--brand-on-primary)] py-4 text-sm font-semibold shadow hover:opacity-90 transition disabled:opacity-50"
+                    >
+                      {isSubmittingBooking
+                        ? "Reserving Slot..."
+                        : paymentOption === "PAY_AT_BUSINESS"
+                          ? "Confirm Reservation (Pay at Venue)"
+                          : `Pay ${formatCurrency(estimatedTotalPayable, currencySymbol)} & Book`}
+                    </button>
+                  </div>
+                )}
+
+                {/* Step 4: Bank Transfer Dynamic Hold Screen */}
+                {step === 4 && bookingHold && (
+                  <div className="space-y-4">
+                    {bookingHold.expires_at && (
+                      <BookingHoldTimer
+                        expiresAt={bookingHold.expires_at}
+                        onExpire={() => setIsHoldExpired(true)}
+                      />
                     )}
 
-                    {selectedPayment === "BNPL" && (
-                      <div className="mt-4 rounded-xl bg-[#edf7e5] p-4 text-sm">
-                        <p className="font-bold text-[#294a32]">Pay in installments</p>
-                        <p className="mt-1 text-xs leading-5 text-[#526653]">
-                          Buy Now, Pay Later lets you reserve your appointment now and split your payment over time.
+                    {isHoldExpired ? (
+                      <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center space-y-3">
+                        <h3 className="text-base font-bold text-red-900">
+                          Hold Window Expired
+                        </h3>
+                        <p className="text-xs text-red-700">
+                          Your reservation hold expired before payment verification. Please pick a new
+                          slot to book.
                         </p>
+                        <button
+                          type="button"
+                          onClick={() => goToStep(1)}
+                          className="rounded-full bg-red-600 px-6 py-2.5 text-xs font-bold text-white hover:bg-red-700 transition"
+                        >
+                          Pick New Slot
+                        </button>
                       </div>
+                    ) : (
+                      <BankTransferPaymentView
+                        target={target}
+                        reference={bookingHold.reference}
+                        accounts={virtualAccounts}
+                        amountDue={bookingHold.amount_due_now}
+                        currencySymbol={currencySymbol}
+                        onVerified={() => goToStep(5)}
+                        onExpired={() => setIsHoldExpired(true)}
+                      />
                     )}
                   </div>
+                )}
 
-                  <button
-                    type="button"
-                    onClick={handlePayment}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#2d9765] px-4 py-3.5 text-sm font-bold text-white transition hover:bg-[#247e53]"
-                  >
-                    <span aria-hidden="true">✓</span>
-                    {selectedPayment === "BNPL"
-                      ? `Continue with Pay Later`
-                      : `Pay ${formatCurrency(selectedService.price, currency)} & Book`}
-                  </button>
-                  <p className="text-center text-xs text-[#8a948e]">
-                    Preview only · Your appointment is not actually booked or charged.
-                  </p>
-                </>
+                {/* Step 5: Confirmed Screen */}
+                {step === 5 && bookingHold && (
+                  <div className="rounded-3xl border border-gray-200 bg-white p-8 text-center space-y-6 shadow-sm">
+                    <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl font-bold text-emerald-700">
+                      ✓
+                    </span>
+
+                    <div>
+                      <h3 className="font-display text-2xl sm:text-3xl uppercase tracking-wide text-gray-900">
+                        Appointment Confirmed!
+                      </h3>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Confirmation sent to {customer.phone || customer.email}.
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5 text-left space-y-2.5 text-xs">
+                      <div className="flex justify-between border-b border-gray-200 pb-2">
+                        <span className="text-gray-500">Booking Reference</span>
+                        <span className="font-mono text-sm font-bold text-gray-900">
+                          {bookingHold.reference}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Service</span>
+                        <span className="font-semibold text-gray-900">{bookingHold.service_name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Date & Time</span>
+                        <span className="font-semibold text-gray-900">
+                          {bookingHold.booking_date} at {bookingHold.start_time} - {bookingHold.end_time}
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-t border-gray-200 pt-2 font-bold">
+                        <span className="text-gray-700">Balance Due at Venue</span>
+                        <span className="text-[var(--brand-primary)]">
+                          {formatCurrency(bookingHold.balance_due_later, currencySymbol)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab("lookup");
+                        }}
+                        className="flex-1 rounded-full bg-black py-3.5 text-xs font-bold text-white hover:bg-gray-800 transition"
+                      >
+                        View in My Bookings
+                      </button>
+                      <button
+                        type="button"
+                        onClick={returnToCatalog}
+                        className="flex-1 rounded-full border border-gray-300 py-3.5 text-xs font-bold text-gray-700 hover:bg-gray-100 transition"
+                      >
+                        Book Another Service
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              {/* Sidebar Booking Summary */}
+              {selectedService && step < 5 && (
+                <aside className="space-y-4">
+                  <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                      Summary
+                    </h3>
+
+                    <div className="border-b border-gray-100 pb-3">
+                      <h4 className="font-bold text-gray-900">{selectedService.name}</h4>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Duration: {selectedService.duration_display || `${selectedService.duration} mins`}
+                      </p>
+                      <p className="mt-1.5 text-base font-extrabold text-[var(--brand-primary)]">
+                        {formatCurrency(selectedService.amount, currencySymbol)}
+                      </p>
+                    </div>
+
+                    {selectedDate && (
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between text-gray-600">
+                          <span>Date:</span>
+                          <span className="font-semibold text-gray-900">{selectedDate}</span>
+                        </div>
+                        {selectedSlot && (
+                          <div className="flex justify-between text-gray-600">
+                            <span>Time:</span>
+                            <span className="font-semibold text-gray-900">
+                              {selectedSlot.display || selectedSlot.start_time}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="border-t border-gray-100 pt-3 text-xs text-gray-500">
+                      <span>Payment Option: </span>
+                      <span className="font-semibold text-gray-900">
+                        {paymentOption.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                  </div>
+                </aside>
               )}
+            </div>
+          </div>
+        </main>
+      )}
 
-              {step === 4 && selectedService && (
-                <div className="rounded-2xl border border-[#e7ece8] bg-white p-6 text-center sm:p-8">
-                  <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#e8f6ed] text-2xl font-bold text-[#278e5b]">
-                    ✓
-                  </span>
-                  <h2 className="mt-4 text-xl font-extrabold">Booking Preview Complete</h2>
-                  <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[#77827b]">
-                    Your sample {selectedService.name.toLowerCase()} appointment is ready to review. No payment was processed and no booking was saved.
-                  </p>
-                  <div className="mt-6 text-left">{summary}</div>
-                  <p className="mt-4 text-sm font-semibold text-[#278e5b]">
-                    Payment method: {PAYMENT_METHODS.find(({ value }) => value === selectedPayment)?.label}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedService(null);
-                      setSelectedTime(null);
-                      setCustomer({ name: "", phone: "", email: "", notes: "" });
-                      goToStep(0);
-                    }}
-                    className="mt-6 w-full rounded-lg bg-[#2d9765] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#247e53]"
-                  >
-                    Back to Services
-                  </button>
-                </div>
-              )}
-            </section>
+      {/* Floating WhatsApp contact button */}
+      <WhatsAppButton
+        storeName={businessInfo?.name || storeData?.results?.info?.name}
+        storeData={storeData}
+        storeSlug={storeThemeKey}
+      />
 
-            {step !== 4 && (
-              <aside className="hidden space-y-3 lg:block">
-                <p className="px-1 text-[11px] font-bold uppercase tracking-wide text-[#909a94]">
-                  Booking Summary
-                </p>
-                {summary}
-                <p className="rounded-xl bg-[#eaf5e1] p-3 text-xs leading-5 text-[#526653]">
-                  Preview mode: this booking is sample data and won’t be submitted.
-                </p>
-              </aside>
-            )}
-          </main>
-        </>
+      {/* Footer matching Outstore.tsx */}
+      <Footer storeData={storeData} />
+
+      {/* OTP Modal */}
+      {showOtpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            <OtpModal
+              isProcessing={isVerifyingOtp}
+              onSubmit={handleVerifyOtp}
+              onClose={() => setShowOtpModal(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* 3D-Secure Modal */}
+      {showThreeDsModal && bookingHold && (
+        <ThreeDsRedirectModal
+          target={target}
+          reference={bookingHold.reference}
+          redirectHtml={threeDsRedirectHtml}
+          onSuccess={() => {
+            setShowThreeDsModal(false);
+            goToStep(5);
+          }}
+          onClose={() => setShowThreeDsModal(false)}
+        />
       )}
     </div>
   );

@@ -1,4 +1,14 @@
+import type { Category } from "../type";
+
 export type StorefrontType = "in-store" | "out-store";
+
+/**
+ * The main store endpoint returns product AND service categories together;
+ * product pages must only show product ones. Anything not explicitly
+ * "SERVICE" is kept so older responses without `type` still work.
+ */
+export const getProductCategories = (categories?: Category[] | null) =>
+  (categories ?? []).filter((c) => c.type !== "SERVICE");
 
 const PLATFORM_HOSTNAMES = new Set([
   "store.sync360.africa",

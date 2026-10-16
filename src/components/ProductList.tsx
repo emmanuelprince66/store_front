@@ -185,6 +185,38 @@ export const ProductList = ({
         </p>
       </div>
 
+      {/* Category Pills - product categories only (service categories are
+          filtered out by the caller and shown on the Services page). */}
+      {categories.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none sm:flex-wrap sm:justify-center">
+          <button
+            type="button"
+            onClick={() => onCategoryChange(null)}
+            className={`shrink-0 px-4 py-2 rounded-full text-xs font-semibold cursor-pointer transition ${
+              selectedCategoryId === null
+                ? "bg-[var(--brand-primary)] text-[var(--brand-on-primary)] shadow-sm"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            All Products
+          </button>
+          {categories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              onClick={() => onCategoryChange(category.id)}
+              className={`shrink-0 px-4 py-2 rounded-full text-xs font-semibold cursor-pointer transition capitalize ${
+                selectedCategoryId === category.id
+                  ? "bg-[var(--brand-primary)] text-[var(--brand-on-primary)] shadow-sm"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              {category.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Products Grid */}
       {isLoading && Array.isArray(products) && products.length === 0 ? (
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-8">
