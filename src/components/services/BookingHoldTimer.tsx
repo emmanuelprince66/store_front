@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface BookingHoldTimerProps {
   expiresAt: string | null | undefined;
@@ -16,6 +16,13 @@ export const BookingHoldTimer = ({
     const diff = Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000);
     return Math.max(0, diff);
   });
+
+  // Kept in a ref so an inline `onExpire` from the parent doesn't restart the
+  // interval on every render.
+  const onExpireRef = useRef(onExpire);
+  useEffect(() => {
+    onExpireRef.current = onExpire;
+  }, [onExpire]);
 
   useEffect(() => {
     if (!expiresAt) {
@@ -35,12 +42,12 @@ export const BookingHoldTimer = ({
       setSecondsRemaining(remaining);
       if (remaining <= 0) {
         clearInterval(timer);
-        onExpire?.();
+        onExpireRef.current?.();
       }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [expiresAt, onExpire]);
+  }, [expiresAt]);
 
   if (secondsRemaining === null) return null;
 

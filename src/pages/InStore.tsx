@@ -2,11 +2,12 @@
 // FILE: pages/InStore.tsx
 // ============================================
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { BaseUrl } from "../base-url";
+import { HeroBannerCarousel } from "../components/HeroBannerCarousel";
 import { HeaderSkeleton } from "../components/CardSkeleton";
 import { Footer } from "../components/Footer";
 import { Navbar } from "../components/Navbar";
@@ -17,11 +18,7 @@ import { WhatsAppButton } from "../components/WhatsAppButton";
 import type { Product, StoreData } from "../type";
 import useFetchData from "../useFetchDataHook";
 import { useStoreTheme } from "../utils/theme";
-import {
-  getCustomStoreDomain,
-  getProductCategories,
-  getStoreDataPath,
-} from "../utils/storefront";
+import { getCustomStoreDomain, getProductCategories, getStoreDataPath, getStoreBanners } from "../utils/storefront";
 import { Checkout } from "./Checkout";
 
 const InStore = () => {
@@ -40,9 +37,6 @@ const InStore = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     navState?.categoryId ?? null,
   );
-  const [bannerLoaded, setBannerLoaded] = useState(false);
-  const [loadedBannerImage, setLoadedBannerImage] = useState("");
-  const [bannerImage, setBannerImage] = useState<string>("");
 
   // Use useParams to get the slug from the URL path
   const { slug } = useParams<{ slug: string }>();
@@ -82,17 +76,6 @@ const InStore = () => {
   };
 
   // Track banner image changes
-  useEffect(() => {
-    const storeBanner = storeData?.results?.info?.banner || "";
-
-    if (storeBanner) {
-      setBannerImage(storeBanner);
-    } else if (!isLoading && !bannerImage) {
-      setBannerImage(
-        "https://images.unsplash.com/photo-1441986300917-64674bd600d8?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80",
-      );
-    }
-  }, [storeData?.results?.info?.banner, isLoading, bannerImage]);
 
   const handleSearchChange = (search: string) => {
     setSearchQuery(search);
@@ -257,31 +240,10 @@ const InStore = () => {
 
         {/* Hero Banner */}
         <div className="relative text-white overflow-hidden">
-          <div className="absolute inset-0">
-            {(!bannerLoaded || loadedBannerImage !== bannerImage) && (
-              <div className="w-full h-full bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 animate-pulse" />
-            )}
-
-            {bannerImage && (
-              <img
-                key={bannerImage}
-                src={bannerImage}
-                alt="Shopping background"
-                fetchPriority="high"
-                decoding="async"
-                className={`w-full h-full object-cover transition-opacity duration-700 ${
-                  bannerLoaded && loadedBannerImage === bannerImage
-                    ? "opacity-100"
-                    : "opacity-0"
-                }`}
-                onLoad={() => {
-                  setLoadedBannerImage(bannerImage);
-                  setBannerLoaded(true);
-                }}
-              />
-            )}
-            <div className="absolute inset-0 bg-black/55" />
-          </div>
+          <HeroBannerCarousel
+            images={getStoreBanners(storeData?.results?.info)}
+            alt={storeData?.results?.info?.name || "Store banner"}
+          />
 
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24 lg:py-28">
             <div className="max-w-3xl">

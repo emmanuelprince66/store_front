@@ -61,10 +61,11 @@ export interface PaymentOptionsConfig {
   allow_full_payment: boolean;
   allow_deposit: boolean;
   min_deposit_percentage?: number | null;
-  min_deposit_amount?: string | null;
+  min_deposit_amount?: string | number | null;
   deposit_amount?: string | null;
   effective_deposit_amount?: string | null;
   allow_pay_at_business: boolean;
+  is_deposit_non_refundable?: boolean;
   channels?: Array<"BANK-TRANSFER" | "CARD" | "BNPL" | "PAY_AT_BUSINESS" | string>;
 }
 
@@ -73,8 +74,55 @@ export interface BookingRules {
   max_advance_days: number;
   cancellation_window_hours: number;
   cancellation_policy_text: string;
+  custom_policy_text?: string | null;
   booking_interval: number;
 }
+
+/** Customer-facing booking policy returned with the service detail. */
+export interface ServicePolicy {
+  cancellation_window_hours: number;
+  is_deposit_non_refundable: boolean;
+  min_notice_hours: number;
+  max_advance_days: number;
+  min_deposit_percentage: number | null;
+  min_deposit_amount: string | number | null;
+  custom_policy_text: string | null;
+  /** Backend-written one-line summary; the UI renders from the raw fields. */
+  cancellation_policy?: string | null;
+}
+
+/** Collects the customer-facing policy from the service detail. The API
+ * spreads it across `booking_rules` (windows, notice, custom text) and
+ * `payment_options` (deposit fields); a `policy` block, if ever sent, wins. */
+export const resolveServicePolicy = (
+  detail: ServiceDetailResponse | null | undefined,
+): ServicePolicy | null => {
+  if (!detail) return null;
+  const rules = detail.booking_rules;
+  const policy = detail.policy;
+  if (!policy && !rules) return null;
+  return {
+    cancellation_window_hours:
+      policy?.cancellation_window_hours ?? rules?.cancellation_window_hours ?? 0,
+    is_deposit_non_refundable:
+      (policy?.is_deposit_non_refundable ??
+        detail.payment_options?.is_deposit_non_refundable) === true,
+    min_notice_hours: policy?.min_notice_hours ?? rules?.min_notice_hours ?? 0,
+    max_advance_days: policy?.max_advance_days ?? rules?.max_advance_days ?? 0,
+    min_deposit_percentage:
+      policy?.min_deposit_percentage ??
+      detail.payment_options?.min_deposit_percentage ??
+      null,
+    min_deposit_amount:
+      policy?.min_deposit_amount ??
+      detail.payment_options?.min_deposit_amount ??
+      null,
+    custom_policy_text:
+      (policy?.custom_policy_text ?? rules?.custom_policy_text)?.trim() || null,
+    cancellation_policy:
+      policy?.cancellation_policy ?? rules?.cancellation_policy_text ?? null,
+  };
+};
 
 export interface OperatingDaySchedule {
   day: string;
@@ -88,7 +136,9 @@ export interface ServiceDetailResponse {
   service: StoreServiceItem;
   staff_options: StaffOption[];
   payment_options: PaymentOptionsConfig;
-  booking_rules: BookingRules;
+  /** Older builds only; newer ones send `policy`. Use resolveServicePolicy. */
+  booking_rules?: BookingRules;
+  policy?: ServicePolicy;
   operating_schedule: OperatingDaySchedule[];
   selected_date: string;
   available_slots: AvailableSlot[];

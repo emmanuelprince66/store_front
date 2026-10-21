@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
-import { getErrorMessage } from "../../api/client";
+import { getErrorMessage, isAbortError } from "../../api/client";
 import type { BookingVirtualAccount, StoreTarget, VerifyPaymentResponse } from "../../api/services";
 import { pollBookingPaymentVerification } from "../../api/services";
 
@@ -28,6 +28,11 @@ export const BankTransferPaymentView = ({
 
   const account = accounts[0];
 
+  // Stop polling if the customer leaves this screen, so a late result can't
+  // fire toasts or navigate them after they've moved on.
+  const pollControllerRef = useRef<AbortController | null>(null);
+  useEffect(() => () => pollControllerRef.current?.abort(), []);
+
   const copyToClipboard = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -41,11 +46,14 @@ export const BankTransferPaymentView = ({
     if (isVerifying) return;
     setIsVerifying(true);
     setVerifyStatusMessage("Checking for your incoming transfer with the bank...");
+    const controller = new AbortController();
+    pollControllerRef.current = controller;
 
     try {
       const outcome = await pollBookingPaymentVerification(target, reference, {
         intervalMs: 3000,
         timeoutMs: 120_000,
+        signal: controller.signal,
         onPending: (_res, elapsedMs) => {
           const seconds = Math.floor(elapsedMs / 1000);
           if (seconds > 30) {
@@ -72,10 +80,13 @@ export const BankTransferPaymentView = ({
         );
       }
     } catch (err) {
+      if (isAbortError(err)) return;
       toast.error(getErrorMessage(err, "Failed to verify transfer"));
     } finally {
-      setIsVerifying(false);
-      setVerifyStatusMessage(null);
+      if (!controller.signal.aborted) {
+        setIsVerifying(false);
+        setVerifyStatusMessage(null);
+      }
     }
   };
 

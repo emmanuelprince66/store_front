@@ -9,8 +9,20 @@ interface ServiceCardProps {
 
 export const ServiceCard = ({ service, currency, onBook }: ServiceCardProps) => {
   const price = parseFloat(service.amount) || 0;
-  const depositAmount = service.deposit_amount ? parseFloat(service.deposit_amount) || 0 : null;
-  const isDeposit = service.payment_requirement === "DEPOSIT" && depositAmount !== null;
+  const formatAmount = (value: number) =>
+    `${currency}${value.toLocaleString("en-NG", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  // Customers choose their own deposit (at least the minimum), so the badge
+  // shows the minimum as a starting point rather than a fixed amount.
+  const minDeposit = parseFloat(
+    service.min_deposit_amount || service.deposit_amount || "",
+  );
+  const showDepositBadge =
+    (service.payment_requirement === "DEPOSIT" ||
+      service.payment_requirement === "ANY") &&
+    Number.isFinite(minDeposit);
 
   return (
     <div
@@ -52,10 +64,9 @@ export const ServiceCard = ({ service, currency, onBook }: ServiceCardProps) => 
 
         {/* Top-right badges: Deposit info */}
         <div className="absolute top-2 right-2 z-10 flex flex-col items-end gap-1.5 pointer-events-none">
-          {isDeposit && (
+          {showDepositBadge && (
             <span className="bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] text-[10px] font-semibold px-2.5 py-1 rounded-full backdrop-blur-sm">
-              Deposit: {currency}
-              {depositAmount.toLocaleString("en-NG", { minimumFractionDigits: 0 })}
+              Deposit from {formatAmount(minDeposit)}
             </span>
           )}
         </div>
@@ -67,7 +78,9 @@ export const ServiceCard = ({ service, currency, onBook }: ServiceCardProps) => 
             e.stopPropagation();
             onBook(service);
           }}
-          className="absolute bottom-3 left-3 right-3 py-2.5 rounded-full text-xs font-semibold transition-all duration-300 opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 bg-[var(--brand-primary)] text-[var(--brand-on-primary)] hover:opacity-90 shadow-md text-center cursor-pointer"
+          // Visible on hover, on keyboard focus, and always on touch screens
+          // (which can't hover) so it's never an invisible tab stop.
+          className="absolute bottom-3 left-3 right-3 py-2.5 rounded-full text-xs font-semibold transition-all duration-300 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 translate-y-2 group-hover:translate-y-0 focus-visible:translate-y-0 [@media(hover:none)]:translate-y-0 bg-[var(--brand-primary)] text-[var(--brand-on-primary)] hover:opacity-90 shadow-md text-center cursor-pointer"
         >
           Book Appointment
         </button>
@@ -92,8 +105,7 @@ export const ServiceCard = ({ service, currency, onBook }: ServiceCardProps) => 
 
         <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
           <span className="text-base sm:text-lg font-bold text-[var(--brand-primary)]">
-            {currency}
-            {price.toLocaleString("en-NG", { minimumFractionDigits: 2 })}
+            {formatAmount(price)}
           </span>
 
           <button
@@ -102,7 +114,7 @@ export const ServiceCard = ({ service, currency, onBook }: ServiceCardProps) => 
               e.stopPropagation();
               onBook(service);
             }}
-            className="sm:hidden text-xs font-semibold px-3 py-1.5 rounded-full bg-[var(--brand-primary)] text-[var(--brand-on-primary)] cursor-pointer"
+            className="sm:hidden min-h-9 text-xs font-semibold px-4 py-2 rounded-full bg-[var(--brand-primary)] text-[var(--brand-on-primary)] cursor-pointer"
           >
             Book
           </button>

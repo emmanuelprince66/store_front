@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { getErrorMessage } from "../api/client";
+import { getErrorMessage, isAbortError } from "../api/client";
 import type {
   AvailableSlot,
   BookingHoldDetails,
@@ -20,14 +20,21 @@ import {
   fetchServiceDetail,
   fetchStoreServices,
   pollBookingPaymentVerification,
+  resolveServicePolicy,
   verifyBookingPayment,
 } from "../api/services";
+import { HeroBannerCarousel } from "../components/HeroBannerCarousel";
 import { ProductCardSkeleton } from "../components/CardSkeleton";
 import { Footer } from "../components/Footer";
 import { Navbar } from "../components/Navbar";
 import { ServiceCard } from "../components/ServiceCard";
 import { BankTransferPaymentView } from "../components/services/BankTransferPaymentView";
 import { BookingHoldTimer } from "../components/services/BookingHoldTimer";
+import {
+  BookingPolicyAgreement,
+  BookingPolicyModal,
+  BookingPolicySummary,
+} from "../components/services/BookingPolicy";
 import { CardPaymentForm } from "../components/services/CardPaymentForm";
 import { ServiceSelfServicePortal } from "../components/services/ServiceSelfServicePortal";
 import { ThreeDsRedirectModal } from "../components/services/ThreeDsRedirectModal";
@@ -35,7 +42,11 @@ import { PaymentPinField } from "../components/PaymentPinField";
 import { WhatsAppButton } from "../components/WhatsAppButton";
 import type { Category, StoreData } from "../type";
 import useFetchData from "../useFetchDataHook";
-import { getCustomStoreDomain } from "../utils/storefront";
+import {
+  getCustomStoreDomain,
+  getStoreBanners,
+  getStorefrontPath,
+} from "../utils/storefront";
 import { useStoreTheme } from "../utils/theme";
 import { isValidAkawopayPhone } from "../utils/akawopay";
 import OtpModal from "./OtpModal";
@@ -55,6 +66,23 @@ const localDateKey = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
     date.getDate(),
   ).padStart(2, "0")}`;
+
+const formatDisplayDate = (dateKey: string) =>
+  new Intl.DateTimeFormat("en-NG", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(new Date(`${dateKey}T12:00:00`));
+
+const PAYMENT_OPTION_LABELS: Record<BookingPaymentOption, string> = {
+  FULL_PAYMENT: "Full payment",
+  DEPOSIT: "Deposit",
+  PAY_AT_BUSINESS: "Pay at business",
+};
+
+// What a pending hold is waiting on, so pressing Pay again resumes that step
+// instead of creating a second hold (and a second charge).
+type PendingHoldAction = "OTP" | "3DS" | "TRANSFER" | "PROCESSING";
 
 export const Services = () => {
   const navigate = useNavigate();
@@ -103,16 +131,14 @@ export const Services = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [servicesRefreshKey, setServicesRefreshKey] = useState(0);
   const [isLoadingServices, setIsLoadingServices] = useState(true);
-
-  // Banner loading state matching Outstore.tsx
-  const [bannerLoaded, setBannerLoaded] = useState(false);
-  const [loadedBannerImage, setLoadedBannerImage] = useState("");
-  const [bannerImage, setBannerImage] = useState<string>("");
+  const [servicesError, setServicesError] = useState<string | null>(null);
 
   // Selected Service & Dynamic Slots state
   const [selectedService, setSelectedService] = useState<StoreServiceItem | null>(null);
   const [serviceDetail, setServiceDetail] = useState<ServiceDetailResponse | null>(null);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+  const [slotsError, setSlotsError] = useState<string | null>(null);
+  const [slotsRefreshKey, setSlotsRefreshKey] = useState(0);
   const [selectedDate, setSelectedDate] = useState(localDateKey(new Date()));
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
 
@@ -142,62 +168,59 @@ export const Services = () => {
   const [bookingHold, setBookingHold] = useState<BookingHoldDetails | null>(null);
   const [virtualAccounts, setVirtualAccounts] = useState<BookingVirtualAccount[]>([]);
   const [isHoldExpired, setIsHoldExpired] = useState(false);
+  const pendingHoldActionRef = useRef<PendingHoldAction | null>(null);
+  // Cancels in-flight payment polling when the customer leaves the flow, so a
+  // late result can't jump them to an empty "confirmed" screen.
+  const flowAbortRef = useRef<AbortController | null>(null);
+  // Reference to open in the "My Bookings" tab (deep link or just-booked).
+  const [lookupReference, setLookupReference] = useState(urlReference || "");
 
   // Modals
   const [showOtpModal, setShowOtpModal] = useState(false);
+  const [policyAccepted, setPolicyAccepted] = useState(false);
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [showThreeDsModal, setShowThreeDsModal] = useState(false);
   const [threeDsRedirectHtml, setThreeDsRedirectHtml] = useState<string | undefined>();
 
-  // Initialize banner image
-  useEffect(() => {
-    const storeBanner = storeData?.results?.info?.banner || "";
-    if (storeBanner) {
-      setBannerImage(storeBanner);
-    } else if (!bannerImage) {
-      setBannerImage(
-        "https://images.unsplash.com/photo-1560066984-138dadb4c035?ixlib=rb-1.2.1&auto=format&fit=crop&w=1200&q=75",
-      );
-    }
-  }, [storeData?.results?.info?.banner, bannerImage]);
+  useEffect(() => () => flowAbortRef.current?.abort(), []);
 
   // Fetch Services List
   useEffect(() => {
-    let isMounted = true;
+    const controller = new AbortController();
     const loadServices = async () => {
       setIsLoadingServices(true);
+      setServicesError(null);
       try {
-        const data = await fetchStoreServices(target, {
-          category_id: selectedCategory,
-          search: searchQuery,
-        });
-        if (isMounted) {
-          setBusinessInfo(data.business);
-          setServices(data.services || []);
-          // Service categories come from this endpoint, separate from the
-          // product categories on the main store response.
-          if (data.categories) {
-            setServiceCategories(
-              data.categories.filter((c) => c.type === "SERVICE"),
-            );
-          }
+        const data = await fetchStoreServices(
+          target,
+          { category_id: selectedCategory, search: searchQuery },
+          controller.signal,
+        );
+        setBusinessInfo(data.business);
+        setServices(data.services || []);
+        // Service categories come from this endpoint, separate from the
+        // product categories on the main store response.
+        if (data.categories) {
+          setServiceCategories(
+            data.categories.filter((c) => c.type === "SERVICE"),
+          );
         }
       } catch (err) {
-        if (isMounted) {
-          toast.error(
-            getErrorMessage(err, "Failed to load services for this store."),
-          );
-          setServices([]);
-        }
+        if (isAbortError(err)) return;
+        // Shown inline with a Retry button; an empty list would wrongly read
+        // as "this store has no services".
+        setServicesError(
+          getErrorMessage(err, "Failed to load services for this store."),
+        );
+        setServices([]);
       } finally {
-        if (isMounted) setIsLoadingServices(false);
+        if (!controller.signal.aborted) setIsLoadingServices(false);
       }
     };
 
     loadServices();
-    return () => {
-      isMounted = false;
-    };
+    return () => controller.abort();
   }, [target, selectedCategory, searchQuery, servicesRefreshKey]);
 
   // Handle direct url serviceId param if present
@@ -214,68 +237,68 @@ export const Services = () => {
   useEffect(() => {
     if (!selectedService) return;
 
-    let isMounted = true;
+    const controller = new AbortController();
     const loadSlotDetails = async () => {
       setIsLoadingSlots(true);
+      setSlotsError(null);
       try {
-        const detail = await fetchServiceDetail(target, selectedService.id, {
-          date: selectedDate,
-        });
-        if (isMounted) {
-          setServiceDetail(detail);
-          setSelectedSlot(null);
+        const detail = await fetchServiceDetail(
+          target,
+          selectedService.id,
+          { date: selectedDate },
+          controller.signal,
+        );
+        setServiceDetail(detail);
+        setSelectedSlot(null);
 
-          if (detail.payment_options) {
-            const options = detail.payment_options;
-            setPaymentOption((current) => {
-              if (
-                (current === "FULL_PAYMENT" && options.allow_full_payment) ||
-                (current === "DEPOSIT" && options.allow_deposit) ||
-                (current === "PAY_AT_BUSINESS" && options.allow_pay_at_business)
-              ) {
-                return current;
-              }
-              if (options.allow_full_payment) return "FULL_PAYMENT";
-              if (options.allow_deposit) return "DEPOSIT";
-              return "PAY_AT_BUSINESS";
-            });
-
-            const channels = options.channels?.filter(
-              (channel): channel is "CARD" | "BANK-TRANSFER" | "BNPL" =>
-                channel === "CARD" ||
-                channel === "BANK-TRANSFER" ||
-                channel === "BNPL",
-            );
-            if (channels?.length) {
-              setPaymentMethod((current) =>
-                channels.includes(current as "CARD" | "BANK-TRANSFER" | "BNPL")
-                  ? current
-                  : channels[0],
-              );
+        if (detail.payment_options) {
+          const options = detail.payment_options;
+          setPaymentOption((current) => {
+            if (
+              (current === "FULL_PAYMENT" && options.allow_full_payment) ||
+              (current === "DEPOSIT" && options.allow_deposit) ||
+              (current === "PAY_AT_BUSINESS" && options.allow_pay_at_business)
+            ) {
+              return current;
             }
+            if (options.allow_full_payment) return "FULL_PAYMENT";
+            if (options.allow_deposit) return "DEPOSIT";
+            return "PAY_AT_BUSINESS";
+          });
+
+          const channels = options.channels?.filter(
+            (channel): channel is "CARD" | "BANK-TRANSFER" | "BNPL" =>
+              channel === "CARD" ||
+              channel === "BANK-TRANSFER" ||
+              channel === "BNPL",
+          );
+          if (channels?.length) {
+            setPaymentMethod((current) =>
+              channels.includes(current as "CARD" | "BANK-TRANSFER" | "BNPL")
+                ? current
+                : channels[0],
+            );
           }
         }
       } catch (err) {
-        if (isMounted) {
-          toast.error(getErrorMessage(err, "Failed to load appointment slots."));
-        }
+        if (isAbortError(err)) return;
+        setSlotsError(getErrorMessage(err, "Failed to load appointment slots."));
       } finally {
-        if (isMounted) setIsLoadingSlots(false);
+        if (!controller.signal.aborted) setIsLoadingSlots(false);
       }
     };
 
     loadSlotDetails();
-    return () => {
-      isMounted = false;
-    };
-  }, [target, selectedService, selectedDate]);
+    return () => controller.abort();
+  }, [target, selectedService, selectedDate, slotsRefreshKey]);
 
   const selectedCategoryName = serviceCategories.find(
     (c) => c.id === selectedCategory,
   )?.name;
 
   // Calendar dates list (up to max_advance_days, defaults to 14 days)
-  const maxAdvance = serviceDetail?.booking_rules?.max_advance_days || 14;
+  const servicePolicy = resolveServicePolicy(serviceDetail);
+  const maxAdvance = servicePolicy?.max_advance_days || 14;
   const calendarDates = useMemo(() => {
     return Array.from({ length: Math.min(maxAdvance, 30) }, (_, i) => {
       const d = new Date();
@@ -297,6 +320,7 @@ export const Services = () => {
 
   const startBooking = (service: StoreServiceItem) => {
     setSelectedService(service);
+    setPolicyAccepted(false);
     setSelectedSlot(null);
     setSelectedDate(localDateKey(new Date()));
     setIsHoldExpired(false);
@@ -309,7 +333,41 @@ export const Services = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  /** Drops the current hold (expired or failed) so a fresh one can be made. */
+  const resetHold = () => {
+    flowAbortRef.current?.abort();
+    flowAbortRef.current = null;
+    pendingHoldActionRef.current = null;
+    setBookingHold(null);
+    setVirtualAccounts([]);
+    setShowOtpModal(false);
+    setShowThreeDsModal(false);
+    setThreeDsRedirectHtml(undefined);
+  };
+
+  /** After a hold expires: back to slot picking with fresh capacity counts. */
+  const pickNewSlotAfterExpiry = () => {
+    resetHold();
+    setIsHoldExpired(false);
+    setSelectedSlot(null);
+    setSlotsRefreshKey((k) => k + 1);
+    goToStep(1);
+  };
+
+  const hasPendingHold = Boolean(bookingHold) && step !== 5;
+
   const returnToCatalog = () => {
+    if (
+      hasPendingHold &&
+      !window.confirm(
+        "You have a reserved slot that isn't paid yet. Leave and discard this booking?",
+      )
+    ) {
+      return;
+    }
+    flowAbortRef.current?.abort();
+    flowAbortRef.current = null;
+    pendingHoldActionRef.current = null;
     setSelectedService(null);
     setServiceDetail(null);
     setSelectedSlot(null);
@@ -326,9 +384,12 @@ export const Services = () => {
     setShowOtpModal(false);
     setShowThreeDsModal(false);
     setThreeDsRedirectHtml(undefined);
+    setPolicyAccepted(false);
+    setShowPolicyModal(false);
     setSelectedCategory(null);
     setSearchQuery("");
     setServicesRefreshKey((current) => current + 1);
+    setLookupReference("");
     setActiveTab("book");
     setStep(0);
 
@@ -349,21 +410,28 @@ export const Services = () => {
 
   // Minimum deposit set by the business. The customer may pay more, up to
   // the full service price.
-  const configuredMinDeposit = Number.parseFloat(
-    serviceDetail?.payment_options?.min_deposit_amount ??
-      serviceDetail?.payment_options?.effective_deposit_amount ??
-      serviceDetail?.payment_options?.deposit_amount ??
-      selectedService?.min_deposit_amount ??
-      selectedService?.deposit_amount ??
-      "",
-  );
-  const minDepositAmount = Number.isFinite(configuredMinDeposit)
-    ? configuredMinDeposit
-    : baseServicePrice / 2;
+  // First source that actually holds a number; the backend may send "" for
+  // unset fields, and `??` alone would stop on that empty string.
+  const configuredMinDeposit = [
+    serviceDetail?.policy?.min_deposit_amount,
+    serviceDetail?.payment_options?.min_deposit_amount,
+    serviceDetail?.payment_options?.effective_deposit_amount,
+    serviceDetail?.payment_options?.deposit_amount,
+    selectedService?.min_deposit_amount,
+    selectedService?.deposit_amount,
+  ]
+    .map((value) => Number.parseFloat(String(value ?? "")))
+    .find((value) => Number.isFinite(value));
   const minDepositPercentage =
+    servicePolicy?.min_deposit_percentage ??
     serviceDetail?.payment_options?.min_deposit_percentage ??
     selectedService?.min_deposit_percentage ??
     null;
+  const minDepositAmount =
+    configuredMinDeposit ??
+    (minDepositPercentage != null
+      ? (baseServicePrice * minDepositPercentage) / 100
+      : baseServicePrice / 2);
 
   const enteredDeposit = Number.parseFloat(depositInput);
   // Compare in kobo so 3000 vs "3000.00" or float noise never fails validation.
@@ -434,6 +502,29 @@ export const Services = () => {
     );
   }, [payableOnlineBase, paymentOption, paymentMethod, businessAbsorbsCharges]);
 
+  // Concrete cutoff for the chosen slot, shown next to the policy checkbox.
+  const cancellationNote = useMemo(() => {
+    if (!servicePolicy || !selectedSlot) return null;
+    const windowHours = servicePolicy.cancellation_window_hours;
+    if (windowHours === 0) {
+      return "This booking can\u2019t be cancelled once it\u2019s made, but you can still reschedule.";
+    }
+    const start = new Date(`${selectedDate}T${selectedSlot.start_time}`);
+    if (Number.isNaN(start.getTime())) return null;
+    const cutoff = new Date(start.getTime() - windowHours * 60 * 60 * 1000);
+    if (cutoff.getTime() <= Date.now()) {
+      return "This slot is already inside the cancellation window, so it can\u2019t be cancelled after booking.";
+    }
+    const formatted = cutoff.toLocaleString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    return `You can cancel until ${formatted}.`;
+  }, [servicePolicy, selectedSlot, selectedDate]);
+
   // Form validations
   const canContinueToCustomer = Boolean(selectedSlot && selectedDate);
   const canContinueToPayment = Boolean(
@@ -441,9 +532,61 @@ export const Services = () => {
       (customer.phone.trim().length >= 8 || customer.email.trim().includes("@")),
   );
 
+  /**
+   * A hold already exists (customer closed the OTP/3DS window, a BNPL poll
+   * timed out, …). Check it once and resume, rather than POSTing /book/ again,
+   * which would create a second hold and a second charge attempt.
+   * Returns true when handled; false when a new hold should be created.
+   */
+  const resumeExistingHold = async (): Promise<boolean> => {
+    if (!bookingHold) return false;
+    setIsSubmittingBooking(true);
+    try {
+      const res = await verifyBookingPayment(target, bookingHold.reference);
+      if (res.status === "CONFIRMED") {
+        toast.success("Payment confirmed! Your booking is complete.");
+        goToStep(5);
+        return true;
+      }
+      if (res.status === "EXPIRED") {
+        toast.error("Your slot reservation expired. Please pick a new slot.");
+        pickNewSlotAfterExpiry();
+        return true;
+      }
+      if (res.status === "FAILED") {
+        // Payment failed for good: discard it and let the customer try again.
+        resetHold();
+        return false;
+      }
+      switch (pendingHoldActionRef.current) {
+        case "OTP":
+          setShowOtpModal(true);
+          break;
+        case "3DS":
+          setShowThreeDsModal(true);
+          break;
+        case "TRANSFER":
+          goToStep(4);
+          break;
+        default:
+          toast.info(
+            "Your payment is still being processed. Please wait a moment and try again.",
+          );
+      }
+      return true;
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Couldn't check your payment status."));
+      return true;
+    } finally {
+      setIsSubmittingBooking(false);
+    }
+  };
+
   // Booking Hold & Payment Submission
   const handleProceedBookingHold = async () => {
-    if (!selectedService || !selectedSlot) return;
+    if (!selectedService || !selectedSlot || isSubmittingBooking) return;
+
+    if (bookingHold && (await resumeExistingHold())) return;
 
     const paymentOptions = serviceDetail?.payment_options;
     if (
@@ -459,6 +602,11 @@ export const Services = () => {
 
     if (depositError) {
       toast.warn(depositError);
+      return;
+    }
+
+    if (servicePolicy && !policyAccepted) {
+      toast.warn("Please agree to the cancellation and booking policy to continue.");
       return;
     }
 
@@ -532,44 +680,58 @@ export const Services = () => {
         response.booking.status === "CONFIRMED" ||
         response.payment?.status === "CONFIRMED"
       ) {
+        pendingHoldActionRef.current = null;
         toast.success(response.message || "Booking reserved successfully!");
         goToStep(5);
       } else if (response.payment?.method === "BANK-TRANSFER") {
+        pendingHoldActionRef.current = "TRANSFER";
         toast.info("Booking slot reserved. Transfer funds to confirm.");
         goToStep(4);
       } else if (response.payment?.status === "OTP_REQUIRED") {
+        pendingHoldActionRef.current = "OTP";
         setShowOtpModal(true);
       } else if (
         response.payment?.status === "REDIRECT_REQUIRED" &&
         response.payment?.redirect_html
       ) {
+        pendingHoldActionRef.current = "3DS";
         setThreeDsRedirectHtml(response.payment.redirect_html);
         setShowThreeDsModal(true);
       } else if (response.payment?.method === "BNPL") {
+        pendingHoldActionRef.current = "PROCESSING";
         toast.info("Authorizing Buy Now, Pay Later with Akawopay...");
+        const controller = new AbortController();
+        flowAbortRef.current = controller;
         const pollResult = await pollBookingPaymentVerification(
           target,
           response.booking.reference,
-          { timeoutMs: 90_000 },
+          { timeoutMs: 90_000, signal: controller.signal },
         );
         if (pollResult.outcome === "CONFIRMED") {
+          pendingHoldActionRef.current = null;
           toast.success("BNPL Payment approved! Booking confirmed.");
           goToStep(5);
         } else if (pollResult.outcome === "EXPIRED") {
           toast.error("Booking hold expired before authorization completed.");
-          setIsHoldExpired(true);
+          pickNewSlotAfterExpiry();
         } else if (pollResult.outcome === "FAILED") {
+          resetHold();
           toast.error(
             pollResult.response?.message || "BNPL authorization was declined.",
           );
         } else {
-          toast.error("BNPL authorization timed out. Please try again.");
+          toast.error(
+            "BNPL authorization is taking longer than usual. Press Pay again to check its status.",
+          );
         }
       } else {
+        pendingHoldActionRef.current = "TRANSFER";
         toast.info(response.message || "Booking hold created.");
         goToStep(4);
       }
     } catch (err) {
+      // The customer left the flow while BNPL was polling: stay quiet.
+      if (isAbortError(err)) return;
       toast.error(
         getErrorMessage(
           err,
@@ -589,12 +751,12 @@ export const Services = () => {
       const res = await verifyBookingPayment(target, bookingHold.reference, { otp });
       if (res.status === "CONFIRMED") {
         setShowOtpModal(false);
+        pendingHoldActionRef.current = null;
         toast.success("Card payment verified successfully!");
         goToStep(5);
       } else if (res.status === "EXPIRED") {
-        setShowOtpModal(false);
         toast.error("Booking hold expired before OTP verification.");
-        setIsHoldExpired(true);
+        pickNewSlotAfterExpiry();
       } else {
         toast.error(res.message || "Invalid OTP code. Please try again.");
       }
@@ -618,7 +780,16 @@ export const Services = () => {
         }}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onCheckout={() => {}}
+        onCheckout={() =>
+          // The cart holds products; checkout lives on the product storefront.
+          navigate(
+            getStorefrontPath(
+              location.pathname.startsWith("/i/") ? "in-store" : "out-store",
+              effectiveSlug,
+            ),
+            { state: { openCheckout: true } },
+          )
+        }
       />
 
       {/* Sub-navigation bar with Services Catalog & Lookup My Booking */}
@@ -628,13 +799,15 @@ export const Services = () => {
             <button
               type="button"
               onClick={() => {
-                if (step !== 0 || activeTab !== "book") {
-                  returnToCatalog();
-                } else {
+                // Coming back from "My Bookings" returns to wherever the
+                // customer was; it must not wipe an in-progress booking.
+                if (activeTab !== "book") {
                   setActiveTab("book");
+                } else if (step !== 0) {
+                  returnToCatalog();
                 }
               }}
-              className={`px-3.5 sm:px-4 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition ${
+              className={`min-h-9 px-3.5 sm:px-4 py-2 rounded-full text-xs font-semibold cursor-pointer transition ${
                 activeTab === "book"
                   ? "bg-[var(--brand-primary)] text-[var(--brand-on-primary)] shadow-sm"
                   : "text-gray-600 hover:text-black hover:bg-gray-100"
@@ -651,7 +824,7 @@ export const Services = () => {
                 setActiveTab("lookup");
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              className={`inline-flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition shadow-xs ${
+              className={`min-h-9 inline-flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-2 rounded-full text-xs font-semibold cursor-pointer transition shadow-xs ${
                 activeTab === "lookup"
                   ? "bg-[var(--brand-primary)] text-[var(--brand-on-primary)] shadow-sm"
                   : "border border-gray-300 bg-white text-gray-700 hover:text-black hover:border-black"
@@ -678,11 +851,11 @@ export const Services = () => {
 
       {activeTab === "lookup" ? (
         /* Customer Self-Service Portal */
-        <main className="flex-1 bg-[#f9faf9] py-10 sm:py-14">
+        <main className="flex-1 bg-[var(--brand-surface)] py-10 sm:py-14">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <ServiceSelfServicePortal
               target={target}
-              initialReference={urlReference || ""}
+              initialReference={lookupReference}
               currencySymbol={currencySymbol}
               onBackToBooking={returnToCatalog}
             />
@@ -693,31 +866,10 @@ export const Services = () => {
         <>
           {/* Hero Banner matching Outstore.tsx */}
           <div className="relative text-white overflow-hidden">
-            <div className="absolute inset-0">
-              {(!bannerLoaded || loadedBannerImage !== bannerImage) && (
-                <div className="w-full h-full bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 animate-pulse" />
-              )}
-
-              {bannerImage && (
-                <img
-                  key={bannerImage}
-                  src={bannerImage}
-                  alt="Services background"
-                  fetchPriority="high"
-                  decoding="async"
-                  className={`w-full h-full object-cover transition-opacity duration-700 ${
-                    bannerLoaded && loadedBannerImage === bannerImage
-                      ? "opacity-100"
-                      : "opacity-0"
-                  }`}
-                  onLoad={() => {
-                    setLoadedBannerImage(bannerImage);
-                    setBannerLoaded(true);
-                  }}
-                />
-              )}
-              <div className="absolute inset-0 bg-black/55" />
-            </div>
+            <HeroBannerCarousel
+              images={getStoreBanners(storeData?.results?.info)}
+              alt={storeData?.results?.info?.name || "Store banner"}
+            />
 
             <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24 lg:py-28">
               <div className="max-w-3xl">
@@ -725,8 +877,8 @@ export const Services = () => {
                   Discover Our Services
                 </h1>
                 <p className="text-base sm:text-lg text-white/90 max-w-xl">
-                  {storeData?.results?.info.description ||
-                    "                    Browse our services, choose an available appointment slot, and book online."}
+                  {storeData?.results?.info?.description ||
+                    "Browse our services, choose an available appointment slot, and book online."}
                 </p>
               </div>
             </div>
@@ -737,7 +889,7 @@ export const Services = () => {
                 <div className="grid grid-cols-3 gap-2 sm:gap-8 divide-x divide-white/15">
                   <div className="text-center sm:text-left sm:pl-2">
                     <p className="font-display text-xl sm:text-4xl text-[var(--brand-on-primary)]">
-                      {services.length}+
+                      {isLoadingServices ? "—" : services.length}
                     </p>
                     <p className="text-[10px] sm:text-sm text-[var(--brand-on-primary)]/80 mt-0.5">
                       Services Available
@@ -843,10 +995,26 @@ export const Services = () => {
 
               {/* Grid matching ProductList */}
               {isLoadingServices ? (
-                <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-8">
-                  {[...Array(8)].map((_, i) => (
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-8 lg:gap-10">
+                  {[...Array(6)].map((_, i) => (
                     <ProductCardSkeleton key={i} />
                   ))}
+                </div>
+              ) : servicesError ? (
+                <div className="rounded-3xl border border-red-200 bg-red-50 p-10 text-center max-w-lg mx-auto">
+                  <p className="font-display text-2xl uppercase tracking-wide text-red-900">
+                    Couldn't load services
+                  </p>
+                  <p className="mt-2 text-xs text-red-700 leading-relaxed">
+                    {servicesError}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setServicesRefreshKey((k) => k + 1)}
+                    className="mt-4 px-6 py-2.5 rounded-full bg-[var(--brand-primary)] text-[var(--brand-on-primary)] text-xs font-semibold hover:opacity-90 transition"
+                  >
+                    Try Again
+                  </button>
                 </div>
               ) : services.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-gray-300 bg-gray-50/50 p-12 text-center max-w-lg mx-auto">
@@ -862,14 +1030,14 @@ export const Services = () => {
                     <button
                       type="button"
                       onClick={returnToCatalog}
-                      className="mt-4 px-6 py-2.5 rounded-full bg-black text-white text-xs font-semibold hover:bg-gray-800 transition"
+                      className="mt-4 px-6 py-2.5 rounded-full bg-[var(--brand-primary)] text-[var(--brand-on-primary)] text-xs font-semibold hover:opacity-90 transition"
                     >
                       Reset Filters
                     </button>
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-8">
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-8 lg:gap-10">
                   {services.map((service) => (
                     <ServiceCard
                       key={service.id}
@@ -885,18 +1053,20 @@ export const Services = () => {
         </>
       ) : (
         /* Booking Steps 1 to 5 */
-        <main className="flex-1 bg-[#f9faf9] py-8 sm:py-12">
+        <main className="flex-1 bg-[var(--brand-surface)] py-8 sm:py-12">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
               <section className="space-y-6">
                 {/* Header with Back button */}
                 <div className="flex items-center justify-between border-b border-gray-200 pb-4">
                   <div className="flex items-center gap-3">
-                    {step > 1 && step < 5 && (
+                    {/* No Back on step 4: the slot is held and paid by
+                        transfer; going back would invite a second hold. */}
+                    {step > 1 && step < 4 && (
                       <button
                         type="button"
                         onClick={() => goToStep(step - 1)}
-                        className="rounded-full border border-gray-300 p-2 text-xs text-gray-700 hover:bg-gray-100 transition"
+                        className="min-h-10 rounded-full border border-gray-300 px-3.5 py-2 text-xs text-gray-700 hover:bg-gray-100 transition"
                       >
                         ← Back
                       </button>
@@ -905,7 +1075,7 @@ export const Services = () => {
                       <button
                         type="button"
                         onClick={returnToCatalog}
-                        className="rounded-full border border-gray-300 p-2 text-xs text-gray-700 hover:bg-gray-100 transition"
+                        className="min-h-10 rounded-full border border-gray-300 px-3.5 py-2 text-xs text-gray-700 hover:bg-gray-100 transition"
                       >
                         ← All Services
                       </button>
@@ -920,7 +1090,14 @@ export const Services = () => {
                       </h2>
                       <p className="text-xs text-gray-500">
                         {step < 5
-                          ? `Step ${step} of 4 · ${selectedService?.name}`
+                          ? // The transfer step only exists for bank transfer.
+                            `Step ${step} of ${Math.max(
+                              step,
+                              paymentOption !== "PAY_AT_BUSINESS" &&
+                                paymentMethod === "BANK-TRANSFER"
+                                ? 4
+                                : 3,
+                            )} · ${selectedService?.name}`
                           : "Your booking reservation is complete"}
                       </p>
                     </div>
@@ -992,6 +1169,17 @@ export const Services = () => {
                         <div className="py-10 text-center text-xs text-gray-500 animate-pulse">
                           Fetching available slots from calendar...
                         </div>
+                      ) : slotsError ? (
+                        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-xs text-red-700 space-y-3">
+                          <p>{slotsError}</p>
+                          <button
+                            type="button"
+                            onClick={() => setSlotsRefreshKey((k) => k + 1)}
+                            className="min-h-10 rounded-full bg-[var(--brand-primary)] px-5 py-2 font-semibold text-[var(--brand-on-primary)] hover:opacity-90 transition"
+                          >
+                            Try Again
+                          </button>
+                        </div>
                       ) : !serviceDetail?.available_slots ||
                         serviceDetail.available_slots.length === 0 ? (
                         <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-xs text-gray-500">
@@ -1032,11 +1220,13 @@ export const Services = () => {
                       )}
                     </div>
 
-                    {/* Policy Banner */}
-                    {serviceDetail?.booking_rules?.cancellation_policy_text && (
-                      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-xs text-gray-700">
-                        <strong>Policy:</strong> {serviceDetail.booking_rules.cancellation_policy_text}
-                      </div>
+                    {servicePolicy && (
+                      <BookingPolicySummary
+                        policy={servicePolicy}
+                        formatAmount={(amount) => formatCurrency(amount, currencySymbol)}
+                        showDeposit={Boolean(paymentOptions?.allow_deposit)}
+                        onViewFull={() => setShowPolicyModal(true)}
+                      />
                     )}
 
                     <button
@@ -1183,7 +1373,7 @@ export const Services = () => {
                           >
                             <div className="font-bold text-sm">Pay at Business</div>
                             <div className="text-[11px] text-gray-500 mt-0.5">
-                              ₦0 online (pay at venue)
+                              {formatCurrency(0, currencySymbol)} online (pay at venue)
                             </div>
                           </button>
                         )}
@@ -1338,10 +1528,8 @@ export const Services = () => {
                           <span>Payment Processing Fee</span>
                           <span className="font-semibold text-gray-900">
                             {businessAbsorbsCharges
-                              ? "₦0.00 (Absorbed by business)"
-                              : estimatedCharges > 0
-                                ? formatCurrency(estimatedCharges, currencySymbol)
-                                : "₦0.00"}
+                              ? `${formatCurrency(0, currencySymbol)} (Absorbed by business)`
+                              : formatCurrency(estimatedCharges, currencySymbol)}
                           </span>
                         </div>
 
@@ -1361,15 +1549,33 @@ export const Services = () => {
                       </div>
 
                       <div className="rounded-xl bg-gray-50 p-3 text-[11px] text-gray-500 leading-relaxed border border-gray-100">
-                        <strong>Policy:</strong> Gateway processing fees are non-refundable. If
-                        cancelled, the refundable amount to the customer is strictly the service
-                        deposit/price.
+                        Gateway processing fees are non-refundable.
+                        {servicePolicy?.is_deposit_non_refundable
+                          ? " Deposits are non-refundable; anything paid above the deposit is refunded if you cancel within the policy window."
+                          : " If you cancel within the policy window, the service amount you paid is refunded."}
                       </div>
                     </div>
 
+                    {servicePolicy && (
+                      <BookingPolicyAgreement
+                        checked={policyAccepted}
+                        onChange={setPolicyAccepted}
+                        onViewPolicy={() => setShowPolicyModal(true)}
+                        depositNonRefundable={
+                          servicePolicy.is_deposit_non_refundable &&
+                          paymentOption !== "PAY_AT_BUSINESS"
+                        }
+                        cancellationNote={cancellationNote}
+                      />
+                    )}
+
                     <button
                       type="button"
-                      disabled={isSubmittingBooking || Boolean(depositError)}
+                      disabled={
+                        isSubmittingBooking ||
+                        Boolean(depositError) ||
+                        Boolean(servicePolicy && !policyAccepted)
+                      }
                       onClick={handleProceedBookingHold}
                       className="w-full rounded-full bg-[var(--brand-primary)] text-[var(--brand-on-primary)] py-4 text-sm font-semibold shadow hover:opacity-90 transition disabled:opacity-50"
                     >
@@ -1403,7 +1609,7 @@ export const Services = () => {
                         </p>
                         <button
                           type="button"
-                          onClick={() => goToStep(1)}
+                          onClick={pickNewSlotAfterExpiry}
                           className="rounded-full bg-red-600 px-6 py-2.5 text-xs font-bold text-white hover:bg-red-700 transition"
                         >
                           Pick New Slot
@@ -1416,7 +1622,10 @@ export const Services = () => {
                         accounts={virtualAccounts}
                         amountDue={bookingHold.amount_due_now}
                         currencySymbol={currencySymbol}
-                        onVerified={() => goToStep(5)}
+                        onVerified={() => {
+                          pendingHoldActionRef.current = null;
+                          goToStep(5);
+                        }}
                         onExpired={() => setIsHoldExpired(true)}
                       />
                     )}
@@ -1426,7 +1635,10 @@ export const Services = () => {
                 {/* Step 5: Confirmed Screen */}
                 {step === 5 && bookingHold && (
                   <div className="rounded-3xl border border-gray-200 bg-white p-8 text-center space-y-6 shadow-sm">
-                    <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl font-bold text-emerald-700">
+                    <span
+                      aria-hidden="true"
+                      className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--brand-surface)] text-3xl font-bold text-[var(--brand-primary)]"
+                    >
                       ✓
                     </span>
 
@@ -1453,7 +1665,8 @@ export const Services = () => {
                       <div className="flex justify-between">
                         <span className="text-gray-500">Date & Time</span>
                         <span className="font-semibold text-gray-900">
-                          {bookingHold.booking_date} at {bookingHold.start_time} - {bookingHold.end_time}
+                          {formatDisplayDate(bookingHold.booking_date)} at{" "}
+                          {bookingHold.start_time} – {bookingHold.end_time}
                         </span>
                       </div>
                       <div className="flex justify-between border-t border-gray-200 pt-2 font-bold">
@@ -1468,9 +1681,11 @@ export const Services = () => {
                       <button
                         type="button"
                         onClick={() => {
+                          setLookupReference(bookingHold.reference);
                           setActiveTab("lookup");
+                          window.scrollTo({ top: 0, behavior: "smooth" });
                         }}
-                        className="flex-1 rounded-full bg-black py-3.5 text-xs font-bold text-white hover:bg-gray-800 transition"
+                        className="flex-1 rounded-full bg-[var(--brand-primary)] py-3.5 text-xs font-bold text-[var(--brand-on-primary)] hover:opacity-90 transition"
                       >
                         View in My Bookings
                       </button>
@@ -1508,7 +1723,9 @@ export const Services = () => {
                       <div className="space-y-2 text-xs">
                         <div className="flex justify-between text-gray-600">
                           <span>Date:</span>
-                          <span className="font-semibold text-gray-900">{selectedDate}</span>
+                          <span className="font-semibold text-gray-900">
+                            {formatDisplayDate(selectedDate)}
+                          </span>
                         </div>
                         {selectedSlot && (
                           <div className="flex justify-between text-gray-600">
@@ -1524,7 +1741,7 @@ export const Services = () => {
                     <div className="border-t border-gray-100 pt-3 text-xs text-gray-500">
                       <span>Payment Option: </span>
                       <span className="font-semibold text-gray-900">
-                        {paymentOption.replace(/_/g, " ")}
+                        {PAYMENT_OPTION_LABELS[paymentOption]}
                       </span>
                     </div>
                   </div>
@@ -1558,7 +1775,18 @@ export const Services = () => {
         </div>
       )}
 
-      {/* 3D-Secure Modal */}
+      {/* Booking Policy Modal */}
+      {servicePolicy && (
+        <BookingPolicyModal
+          isOpen={showPolicyModal}
+          onClose={() => setShowPolicyModal(false)}
+          policy={servicePolicy}
+          formatAmount={(amount) => formatCurrency(amount, currencySymbol)}
+          showDeposit={Boolean(serviceDetail?.payment_options?.allow_deposit)}
+          businessName={businessInfo?.name ?? storeData?.results?.info?.name}
+        />
+      )}
+
       {showThreeDsModal && bookingHold && (
         <ThreeDsRedirectModal
           target={target}
@@ -1566,9 +1794,14 @@ export const Services = () => {
           redirectHtml={threeDsRedirectHtml}
           onSuccess={() => {
             setShowThreeDsModal(false);
+            pendingHoldActionRef.current = null;
             goToStep(5);
           }}
           onClose={() => setShowThreeDsModal(false)}
+          onExpired={() => {
+            setShowThreeDsModal(false);
+            pickNewSlotAfterExpiry();
+          }}
         />
       )}
     </div>

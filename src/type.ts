@@ -24,6 +24,8 @@ export interface StoreInfo {
   type: string;
   id: string;
   banner: string | null;
+  /** Hero carousel images, in order. Falls back to `banner`, then `logo`. */
+  banners?: string[];
   pay_transaction_charges: boolean;
   shipbubble?: boolean;
   /** Whether the merchant lets buyers collect at the store instead. */

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import type {
   AvailableSlot,
@@ -11,6 +11,16 @@ import {
   lookupBookingByReference,
   rescheduleBooking,
 } from "../../api/services";
+import { getErrorMessage, isAbortError } from "../../api/client";
+
+// Today in the customer's timezone (toISOString() is UTC and allows yesterday
+// shortly after midnight in Lagos).
+const todayKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`;
+};
 
 interface ServiceSelfServicePortalProps {
   target: StoreTarget;
@@ -54,15 +64,17 @@ export const ServiceSelfServicePortal = ({
       return;
     }
 
+    // Don't clear cancellationResult here: handleCancel refreshes the booking
+    // through this function and the refund details must stay on screen. It's
+    // cleared when the customer starts a new lookup instead.
     setLoading(true);
-    setCancellationResult(null);
 
     try {
       const data = await lookupBookingByReference(target, cleanRef);
       setBooking(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setBooking(null);
-      toast.error(err?.message || "Booking reference not found. Please check and try again.");
+      toast.error(getErrorMessage(err, "Booking reference not found. Please check and try again."));
     } finally {
       setLoading(false);
     }
@@ -89,8 +101,8 @@ export const ServiceSelfServicePortal = ({
       });
       setShowCancelModal(false);
       performLookup(booking.reference);
-    } catch (err: any) {
-      toast.error(err?.message || "Unable to cancel booking at this time.");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Unable to cancel booking at this time."));
     } finally {
       setIsCancelling(false);
     }
@@ -104,16 +116,33 @@ export const ServiceSelfServicePortal = ({
     loadRescheduleSlots(booking.service.id, booking.booking_date);
   };
 
+  // Only the latest request may update the slots, so changing the date quickly
+  // can't show (and submit) times that belong to a different day.
+  const slotsRequestRef = useRef<AbortController | null>(null);
+  useEffect(() => () => slotsRequestRef.current?.abort(), []);
+
   const loadRescheduleSlots = async (serviceId: string, date: string) => {
+    slotsRequestRef.current?.abort();
+    const controller = new AbortController();
+    slotsRequestRef.current = controller;
+
     setIsLoadingSlots(true);
     try {
-      const detail = await fetchServiceDetail(target, serviceId, { date });
+      const detail = await fetchServiceDetail(
+        target,
+        serviceId,
+        { date },
+        controller.signal,
+      );
       setAvailableSlots(detail.available_slots || []);
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to load slots for selected date");
+    } catch (err: unknown) {
+      if (isAbortError(err)) return;
+      toast.error(
+        getErrorMessage(err, "Failed to load slots for selected date"),
+      );
       setAvailableSlots([]);
     } finally {
-      setIsLoadingSlots(false);
+      if (!controller.signal.aborted) setIsLoadingSlots(false);
     }
   };
 
@@ -140,8 +169,8 @@ export const ServiceSelfServicePortal = ({
       toast.success("Booking rescheduled successfully!");
       setShowRescheduleModal(false);
       performLookup(booking.reference);
-    } catch (err: any) {
-      toast.error(err?.message || "Unable to reschedule booking to this slot.");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Unable to reschedule booking to this slot."));
     } finally {
       setIsRescheduling(false);
     }
@@ -204,6 +233,7 @@ export const ServiceSelfServicePortal = ({
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            setCancellationResult(null);
             performLookup(referenceInput);
           }}
           className="mt-5 flex gap-2.5 sm:gap-3"
@@ -351,8 +381,9 @@ export const ServiceSelfServicePortal = ({
           <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4 text-xs text-blue-900 space-y-1">
             <span className="font-bold">Cancellation Policy:</span>
             <p className="text-blue-800">
-              Free cancellation and rescheduling up to {booking.policy.cancellation_window_hours}{" "}
-              hours before the scheduled start time.
+              {booking.policy.cancellation_window_hours === 0
+                ? "This booking can’t be cancelled, but you can still reschedule it."
+                : `Cancellation and rescheduling are allowed up to ${booking.policy.cancellation_window_hours} hours before the scheduled start time.`}
             </p>
           </div>
 
@@ -453,7 +484,7 @@ export const ServiceSelfServicePortal = ({
               <input
                 type="date"
                 value={newDate}
-                min={new Date().toISOString().split("T")[0]}
+                min={todayKey()}
                 onChange={(e) => handleDateChange(e.target.value)}
                 className="w-full rounded-full border border-gray-300 bg-[#f0f0f0] px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-black/10 cursor-pointer"
               />

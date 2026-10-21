@@ -1,4 +1,4 @@
-import type { Category } from "../type";
+import type { Category, StoreInfo } from "../type";
 
 export type StorefrontType = "in-store" | "out-store";
 
@@ -50,4 +50,22 @@ export const getStoreSuccessPath = (
   }
 
   return `/o/success/${encodeURIComponent(storeSlug || "")}`;
+};
+
+const FALLBACK_BANNER =
+  "https://images.unsplash.com/photo-1441986300917-64674bd600d8?ixlib=rb-1.2.1&auto=format&fit=crop&w=1200&q=70";
+
+/** Hero images in priority order: `banners`, then the single `banner`, then
+ * the logo. Returns [] while store info hasn't arrived. */
+export const getStoreBanners = (
+  info: Partial<StoreInfo> | null | undefined,
+): string[] => {
+  if (!info) return [];
+  const banners = Array.isArray(info.banners)
+    ? info.banners.filter((url): url is string => typeof url === "string" && Boolean(url))
+    : [];
+  if (banners.length) return banners;
+  if (info.banner) return [info.banner];
+  if (info.logo) return [info.logo];
+  return [FALLBACK_BANNER];
 };
