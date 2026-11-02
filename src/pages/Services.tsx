@@ -178,6 +178,11 @@ export const Services = () => {
   // Modals
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [policyAccepted, setPolicyAccepted] = useState(false);
+  // The policy's cancellation note and deposit warning depend on these, so
+  // changing either means agreeing again to what's now shown.
+  useEffect(() => {
+    setPolicyAccepted(false);
+  }, [selectedSlot?.start_time, selectedDate, paymentOption]);
   const [showPolicyModal, setShowPolicyModal] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [showThreeDsModal, setShowThreeDsModal] = useState(false);

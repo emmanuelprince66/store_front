@@ -1,6 +1,6 @@
 // File: src/components/ScannerModal.tsx
 
-import { useContext, useMemo, useState } from "react";
+import { useContext, useState } from "react";
 import { CartContext } from "../context/CartContext";
 import Html5QrcodePlugin from "./Html5QrcodePlugin";
 
@@ -15,28 +15,13 @@ const ScannerModal = ({
   onScanSuccess,
   isSearching = false,
 }: ScannerModalProps) => {
-  const { cart } = useContext(CartContext);
+  const { cart, getTotalPrice, getTotalDiscount } = useContext(CartContext);
   const [isCameraReady, setIsCameraReady] = useState(false);
 
   console.log("Current cart:", cart);
 
-  // Calculate cart total and discount
-  const cartSummary = useMemo(() => {
-    let total = 0;
-    let totalDiscount = 0;
-
-    cart.forEach((item) => {
-      const itemPrice = item?.product?.selling_price! * item?.quantity;
-      const itemDiscountAmount = item.product.discount
-        ? (itemPrice * item.product.discount) / 100
-        : 0;
-
-      total += itemPrice - itemDiscountAmount;
-      totalDiscount += itemDiscountAmount;
-    });
-
-    return { total, discount: totalDiscount };
-  }, [cart]);
+  // The cart's own totals, so the scanner and checkout always agree.
+  const cartSummary = { total: getTotalPrice(), discount: getTotalDiscount() };
 
   const handleScanError = (error: string) => {
     // Silent error handling to avoid console spam

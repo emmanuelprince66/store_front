@@ -35,8 +35,10 @@ const ProductBottomDrawer = ({
 
   const displayPrice =
     selectedVariation?.selling_price || product.selling_price || 0;
+  // Number(): the API can send stock as "10.00".
   const displayQuantity =
-    selectedVariation?.quantity || product.quantity || (isCombo ? 99 : 0);
+    Number(selectedVariation?.quantity || product.quantity) ||
+    (isCombo ? 99 : 0);
   const allowOversell = useAllowSalesWithoutStock();
   // Sellable unless empty and the business blocks selling without stock.
   // (LOW still counts as available.)
@@ -150,7 +152,23 @@ const ProductBottomDrawer = ({
                   {product.variations!.map((variation) => (
                     <button
                       key={variation.id}
-                      onClick={() => setSelectedVariation(variation)}
+                      onClick={() => {
+                        setSelectedVariation(variation);
+                        // Each variation has its own stock limit.
+                        setQuantity((current) =>
+                          Math.max(
+                            1,
+                            Math.min(
+                              current,
+                              maxOrderQuantity(
+                                variation.quantity,
+                                allowOversell,
+                                1,
+                              ),
+                            ),
+                          ),
+                        );
+                      }}
                       disabled={isStockOut(variation) && !allowOversell}
                       className={`p-4 rounded-lg border-2 font-medium transition-all text-left ${
                         selectedVariation?.id === variation.id
@@ -167,7 +185,7 @@ const ProductBottomDrawer = ({
                       </div>
                       <div className="text-xs mt-1">
                         {!isStockOut(variation)
-                          ? `${variation.quantity} available`
+                          ? `${Number(variation.quantity)} available`
                           : allowOversell
                             ? "Available on order"
                             : "Out of stock"}

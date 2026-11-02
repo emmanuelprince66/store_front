@@ -4,6 +4,7 @@
 // Shows the media gallery, full description, variations and add-to-cart.
 // ============================================
 
+import { tiersFor } from "../utils/discountTiers";
 import BulkPricingTable from "../components/BulkPricingTable";
 import { isStockOut, maxOrderQuantity, useAllowSalesWithoutStock } from "../utils/stock";
 import { useContext, useEffect, useState } from "react";
@@ -149,16 +150,6 @@ export const ProductPage = ({ type }: ProductPageProps) => {
     isCombo ? 99 : 0,
   );
 
-  const activeDiscount = hasVariations
-    ? selectedVariation?.discount
-    : product.discount;
-  const hasDiscount = activeDiscount != null && activeDiscount > 0;
-  const originalPrice = hasDiscount ? displayPrice + activeDiscount : null;
-  const discountPct =
-    hasDiscount && originalPrice
-      ? Math.round((activeDiscount / originalPrice) * 100)
-      : 0;
-
   const handleAddToCart = () => {
     if (hasVariations && !selectedVariation) return;
     if (isOutOfStock) return;
@@ -231,25 +222,12 @@ export const ProductPage = ({ type }: ProductPageProps) => {
                   {currency}
                   {displayPrice.toFixed(2)}
                 </span>
-                {hasDiscount && originalPrice && (
-                  <>
-                    <span className="text-xl font-bold text-gray-400 line-through">
-                      {currency}
-                      {originalPrice.toFixed(2)}
-                    </span>
-                    <span className="rounded-full bg-[#FF3333]/10 px-2.5 py-1 text-xs font-semibold text-[#FF3333]">
-                      -{discountPct}%
-                    </span>
-                  </>
-                )}
               </div>
 
               {/* Volume tiers for the product, or the chosen variation */}
               {!isCombo && (selectedVariation || !hasVariations) && (
                 <BulkPricingTable
-                  tiers={
-                    (selectedVariation ?? product).discount_thresholds
-                  }
+                  tiers={tiersFor(selectedVariation ?? product)}
                   price={displayPrice}
                   quantity={quantity}
                   currency={currency}
@@ -325,7 +303,23 @@ export const ProductPage = ({ type }: ProductPageProps) => {
                       return (
                         <button
                           key={variation.id}
-                          onClick={() => setSelectedVariation(variation)}
+                          onClick={() => {
+                            setSelectedVariation(variation);
+                            // Each variation has its own stock limit.
+                            setQuantity((current) =>
+                              Math.max(
+                                1,
+                                Math.min(
+                                  current,
+                                  maxOrderQuantity(
+                                    variation.quantity,
+                                    allowOversell,
+                                    1,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }}
                           disabled={varOut}
                           className={`rounded-full border px-5 py-2 text-sm font-medium transition-all ${
                             isSelected

@@ -16,9 +16,16 @@ const PLATFORM_HOSTNAMES = new Set([
   "127.0.0.1",
 ]);
 
+// Netlify test and preview deploys: not a merchant's domain, so the store comes
+// from the URL (/o/<slug>) just as on store.sync360.africa.
+const isTestDeployHost = (hostname: string) =>
+  hostname.endsWith(".netlify.app");
+
 export const getCustomStoreDomain = (): string | undefined => {
   const hostname = window.location.hostname.toLowerCase().replace(/^www\./, "");
-  return PLATFORM_HOSTNAMES.has(hostname) ? undefined : hostname;
+  return PLATFORM_HOSTNAMES.has(hostname) || isTestDeployHost(hostname)
+    ? undefined
+    : hostname;
 };
 
 export const getStoreDataPath = (

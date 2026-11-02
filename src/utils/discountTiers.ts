@@ -8,7 +8,8 @@
  * same numbers the invoice will.
  */
 
-export type DiscountTierType = "PERCENTAGE" | "FIXED_AMOUNT";
+/** ₦ off is "PRICE"; older data may say "FIXED_AMOUNT". Both read as ₦ off. */
+export type DiscountTierType = "PERCENTAGE" | "PRICE" | "FIXED_AMOUNT";
 
 export interface DiscountThreshold {
   id?: string;
@@ -43,8 +44,6 @@ export function calculateProductDiscount(
   sellingPrice: number,
   quantity: number,
   thresholds: DiscountThreshold[] = [],
-  fallbackDiscount = 0,
-  fallbackThreshold = 0,
 ): LineDiscountResult {
   const price = Number(sellingPrice) || 0;
   let unitDiscount = 0;
@@ -79,16 +78,6 @@ export function calculateProductDiscount(
         potentialDiscountValue: Number(nextTier.discount_value),
       };
     }
-  } else if (
-    fallbackDiscount > 0 &&
-    fallbackThreshold > 0 &&
-    quantity >= fallbackThreshold
-  ) {
-    // Capped: some older values were saved as naira, not percent.
-    unitDiscount = Math.min(
-      price,
-      round2(price * (Number(fallbackDiscount) / 100)),
-    );
   }
 
   const totalDiscount = round2(unitDiscount * quantity);
@@ -104,17 +93,32 @@ export function calculateProductDiscount(
   };
 }
 
-/** Tiers for a product or the chosen variation (variations don't inherit). */
-export const tiersFor = (item: {
-  discount_thresholds?: DiscountThreshold[] | null;
-}): DiscountThreshold[] => item.discount_thresholds ?? [];
-
 interface Discountable {
   selling_price?: number | null;
-  discount?: number | null;
-  discount_threshold?: number | null;
+  discount?: number | string | null;
+  discount_threshold?: number | string | null;
   discount_thresholds?: DiscountThreshold[] | null;
 }
+
+/**
+ * The tiers that apply to a product or the chosen variation (variations don't
+ * inherit). The older single discount counts as one open-ended tier: a percent
+ * off from its threshold, or ₦ off when over 100, since 100%+ can't be meant.
+ */
+export const tiersFor = (item: Discountable): DiscountThreshold[] => {
+  if (item.discount_thresholds?.length) return item.discount_thresholds;
+  const value = Number(item.discount);
+  const threshold = Number(item.discount_threshold);
+  if (!(value > 0) || !(threshold > 0)) return [];
+  return [
+    {
+      min_quantity: threshold,
+      max_quantity: null,
+      discount_type: value > 100 ? "PRICE" : "PERCENTAGE",
+      discount_value: value,
+    },
+  ];
+};
 
 /** Discount on one cart line. Combos don't take volume discounts. */
 export const cartLineDiscount = (item: {
@@ -128,13 +132,7 @@ export const cartLineDiscount = (item: {
   if (item.product.type === "COMBO") {
     return calculateProductDiscount(price, item.quantity);
   }
-  return calculateProductDiscount(
-    price,
-    item.quantity,
-    tiersFor(source),
-    Number(source.discount) || 0,
-    Number(source.discount_threshold) || 0,
-  );
+  return calculateProductDiscount(price, item.quantity, tiersFor(source));
 };
 
 /* ----------------------------------------------------------------- labels */

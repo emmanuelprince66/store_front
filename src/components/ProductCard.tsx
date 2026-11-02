@@ -1,4 +1,8 @@
-import { isStockOut, useAllowSalesWithoutStock } from "../utils/stock";
+import {
+  formatQuantity,
+  isStockOut,
+  useAllowSalesWithoutStock,
+} from "../utils/stock";
 import { useContext } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { CartContext } from "../context/CartContext";
@@ -61,14 +65,6 @@ export const ProductCard = ({
   // Combo products don't carry their own stock count — just show status.
   const isCombo = product.type === "COMBO";
 
-  const discountAmount = toFiniteNumber(product.discount);
-  const hasDiscount = discountAmount > 0 && !hasVariations;
-  const originalPrice = hasDiscount ? displayPrice + discountAmount : null;
-  const discountPct =
-    hasDiscount && originalPrice
-      ? Math.round((discountAmount / originalPrice) * 100)
-      : 0;
-
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isOutOfStock) return;
@@ -119,11 +115,6 @@ export const ProductCard = ({
 
           {/* Top-right badges: discount + media indicator */}
           <div className="absolute top-2 right-2 z-10 flex flex-col items-end gap-1.5">
-            {hasDiscount && (
-              <span className="bg-[#FF3333]/10 text-[#FF3333] text-[10px] font-semibold px-2.5 py-1 rounded-full">
-                -{discountPct}%
-              </span>
-            )}
             {mediaInfo.videos > 0 ? (
               <span className="flex items-center gap-1 bg-black/70 text-white text-[10px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm">
                 <svg
@@ -196,17 +187,6 @@ export const ProductCard = ({
                 ? `${displayPrice.toFixed(2)}+`
                 : displayPrice.toFixed(2)}
             </span>
-            {hasDiscount && originalPrice && (
-              <>
-                <span className="text-sm sm:text-base font-bold text-gray-400 line-through">
-                  {currency}
-                  {originalPrice.toFixed(2)}
-                </span>
-                <span className="bg-[#FF3333]/10 text-[#FF3333] text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                  -{discountPct}%
-                </span>
-              </>
-            )}
           </div>
 
           {/* Stock + cart indicator */}
@@ -227,12 +207,12 @@ export const ProductCard = ({
                 : onOrder
                   ? "Available on order"
                   : isLowStock
-                  ? isCombo
+                  ? isCombo || hasVariations
                     ? "Low stock"
-                    : `Only ${product.quantity} left`
-                  : isCombo
+                    : `Only ${formatQuantity(product.quantity)} left`
+                  : isCombo || hasVariations
                     ? "In stock"
-                    : `${product.quantity} in stock`}
+                    : `${formatQuantity(product.quantity)} in stock`}
             </span>
             {isInCart && (
               <span className="text-black font-semibold">In Cart ✓</span>

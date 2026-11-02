@@ -42,12 +42,29 @@ export const toQuantity = (value: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** Nothing on hand: flagged out of stock, or a tracked quantity at/below 0. */
-export const isStockOut = (item?: {
+/** Stock for display: "10.00" reads as 10. */
+export const formatQuantity = (value: unknown): string => {
+  const qty = toQuantity(value);
+  return qty == null ? "" : String(qty);
+};
+
+type Stocked = {
   status?: string | null;
   quantity?: number | string | null;
-} | null): boolean => {
+  type?: string | null;
+  variations?: Stocked[] | null;
+};
+
+/**
+ * Nothing on hand: flagged out of stock, or a tracked quantity at/below 0.
+ * Combos and products with variations hold no stock count of their own, so
+ * their `quantity` says nothing: a combo goes by status, and a product with
+ * variations is out only when every variation is.
+ */
+export const isStockOut = (item?: Stocked | null): boolean => {
   if (!item) return false;
+  if (item.type === "COMBO") return item.status === "OUT-OF-STOCK";
+  if (item.variations?.length) return item.variations.every(isStockOut);
   const qty = toQuantity(item.quantity);
   return item.status === "OUT-OF-STOCK" || (qty != null && qty <= 0);
 };

@@ -72,8 +72,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         return updated;
       }
 
-      // Add new item to cart
-      return [...prev, { product, variation, quantity }];
+      // Add new item to cart, within its stock limit
+      const maxQuantity = maxOrderQuantity(
+        variation?.quantity ?? product.quantity,
+        getAllowSalesWithoutStock(),
+        999,
+      );
+      return [
+        ...prev,
+        { product, variation, quantity: Math.min(quantity, maxQuantity) },
+      ];
     });
   };
 

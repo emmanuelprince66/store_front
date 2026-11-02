@@ -698,9 +698,6 @@ export const useCheckoutHook = ({
   // called before clearCart()/resetCheckoutState() wipes the cart state.
   const buildOrderSummary = (reference: string): OrderSummary => {
     const items: OrderSummaryItem[] = cart.map((item) => {
-      const unitPrice =
-        item.variation?.selling_price || item.product.selling_price || 0;
-
       return {
         id: item.variation?.id || item.product.id,
         name: item.product.name,
@@ -708,7 +705,7 @@ export const useCheckoutHook = ({
         image: getPrimaryImage(item.product),
         quantity: item.quantity,
         // After any bulk discount, so the lines add up to the subtotal.
-        lineTotal: cartLineDiscount(item).subtotal || unitPrice * item.quantity,
+        lineTotal: cartLineDiscount(item).subtotal,
       };
     });
 

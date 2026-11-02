@@ -1,6 +1,10 @@
 import { cartLineDiscount } from "../utils/discountTiers";
 import BulkDiscountNote from "./BulkDiscountNote";
-import { maxOrderQuantity, useAllowSalesWithoutStock } from "../utils/stock";
+import {
+  formatQuantity,
+  maxOrderQuantity,
+  useAllowSalesWithoutStock,
+} from "../utils/stock";
 import { useContext } from "react";
 import { CartContext } from "../context/CartContext";
 import { getPrimaryImage } from "../utils/media";
@@ -91,6 +95,9 @@ const CartModal = ({ onClose, onCheckout }: CartModalProps) => {
             isCombo ? 99 : 0,
           );
           const itemStatus = item.variation?.status || item.product.status;
+          const stockLeft = formatQuantity(
+            item.variation?.quantity ?? item.product.quantity,
+          );
           const lineDiscount = cartLineDiscount(item);
 
           const cartItemKey = item.variation
@@ -168,7 +175,9 @@ const CartModal = ({ onClose, onCheckout }: CartModalProps) => {
 
                 {itemStatus === "LOW" && (
                   <p className="text-[11px] text-amber-600 mb-2">
-                    {isCombo ? "Low stock" : `Only ${maxQuantity} left`}
+                    {isCombo || !stockLeft
+                      ? "Low stock"
+                      : `Only ${stockLeft} left`}
                   </p>
                 )}
 
