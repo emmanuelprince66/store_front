@@ -74,6 +74,16 @@ function App() {
           {/* Fixed: moved success routes to match the actual navigation */}
           <Route path="/o/success/:slug" element={<Success path={"/o"} />} />
           <Route path="/i/success/:slug" element={<Success path={"/i"} />} />
+          {/* Shareable services link without a custom domain:
+              store.sync360.africa/<slug>/services. Declared after the
+              static-prefixed routes so /o, /i, /services and /bookings keep
+              winning any tie. */}
+          <Route path="/:slug/services" element={<Services />} />
+          <Route path="/:slug/services/:serviceId" element={<Services />} />
+          <Route
+            path="/:slug/services/bookings/:reference"
+            element={<Services />}
+          />
           <Route
             path="*"
             element={<div className="text-center mt-10">Not Found</div>}

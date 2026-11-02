@@ -1,3 +1,4 @@
+import { isStockOut, useAllowSalesWithoutStock } from "../utils/stock";
 import { useContext } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { CartContext } from "../context/CartContext";
@@ -51,8 +52,12 @@ export const ProductCard = ({
     ? Math.min(...variationPrices)
     : toFiniteNumber(product.selling_price);
 
-  const isOutOfStock = product.status === "OUT-OF-STOCK";
-  const isLowStock = product.status === "LOW";
+  const allowOversell = useAllowSalesWithoutStock();
+  const stockOut = isStockOut(product);
+  // "Available on order": empty, but the business sells without stock.
+  const onOrder = stockOut && allowOversell;
+  const isOutOfStock = stockOut && !allowOversell;
+  const isLowStock = !stockOut && product.status === "LOW";
   // Combo products don't carry their own stock count — just show status.
   const isCombo = product.type === "COMBO";
 
@@ -93,6 +98,11 @@ export const ProductCard = ({
             {isOutOfStock && (
               <span className="bg-black text-white text-[10px] font-semibold px-2.5 py-1 rounded-full">
                 Out of Stock
+              </span>
+            )}
+            {onOrder && (
+              <span className="bg-amber-500 text-white text-[10px] font-semibold px-2.5 py-1 rounded-full">
+                Available on Order
               </span>
             )}
             {isLowStock && (
@@ -163,7 +173,9 @@ export const ProductCard = ({
                 ? "Select Options"
                 : isInCart
                   ? "View in Cart"
-                  : "Add to Cart"}
+                  : onOrder
+                    ? "Order Now"
+                    : "Add to Cart"}
           </button>
         </div>
 
@@ -203,14 +215,18 @@ export const ProductCard = ({
               className={`${
                 isOutOfStock
                   ? "text-[#FF3333]"
-                  : isLowStock
+                  : onOrder
+                    ? "text-amber-600"
+                    : isLowStock
                     ? "text-amber-600"
                     : "text-gray-500"
               }`}
             >
               {isOutOfStock
                 ? "Out of stock"
-                : isLowStock
+                : onOrder
+                  ? "Available on order"
+                  : isLowStock
                   ? isCombo
                     ? "Low stock"
                     : `Only ${product.quantity} left`

@@ -1,3 +1,6 @@
+import { cartLineDiscount } from "../utils/discountTiers";
+import BulkDiscountNote from "../components/BulkDiscountNote";
+import { maxOrderQuantity, useAllowSalesWithoutStock } from "../utils/stock";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { BnplActivation } from "../components/BnplActivation";
@@ -42,6 +45,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
   type = "out-store",
   storeData,
 }) => {
+  const allowOversell = useAllowSalesWithoutStock();
   const {
     cart,
     subtotal,
@@ -553,9 +557,13 @@ export const Checkout: React.FC<CheckoutProps> = ({
                   item.variation?.selling_price ||
                   item.product.selling_price ||
                   0;
+                const lineDiscount = cartLineDiscount(item);
 
-                const maxQuantity =
-                  item.variation?.quantity || item.product.quantity || 0;
+                const maxQuantity = maxOrderQuantity(
+                  item.variation?.quantity ?? item.product.quantity,
+                  allowOversell,
+                  item.product.type === "COMBO" ? 99 : 0,
+                );
 
                 const cartItemKey = item.variation
                   ? `${item.product.id}-${item.variation.id}`
@@ -617,8 +625,19 @@ export const Checkout: React.FC<CheckoutProps> = ({
                         </button>
                       </div>
                     </div>
-                    <span className="font-semibold text-sm flex-shrink-0">
-                      ₦{formatCurrency(itemPrice * item.quantity)}
+                    <span className="flex flex-col items-end flex-shrink-0">
+                      {lineDiscount.totalDiscount > 0 && (
+                        <span className="text-xs text-gray-400 line-through">
+                          ₦{formatCurrency(itemPrice * item.quantity)}
+                        </span>
+                      )}
+                      <span className="font-semibold text-sm">
+                        ₦{formatCurrency(lineDiscount.subtotal)}
+                      </span>
+                      <BulkDiscountNote
+                        discount={lineDiscount}
+                        className="text-right"
+                      />
                     </span>
                   </div>
                 );
@@ -626,6 +645,18 @@ export const Checkout: React.FC<CheckoutProps> = ({
             </div>
             {/* Payment Section */}
             <div className="space-y-3">
+              {(() => {
+                const bulkDiscount = cart.reduce(
+                  (sum, item) => sum + cartLineDiscount(item).totalDiscount,
+                  0,
+                );
+                return bulkDiscount > 0 ? (
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>Bulk discount (included)</span>
+                    <span>−₦{formatCurrency(bulkDiscount)}</span>
+                  </div>
+                ) : null;
+              })()}
               <div className="flex justify-between text-sm">
                 <span>Subtotal</span>
                 <span>₦{formatCurrency(subtotal)}</span>

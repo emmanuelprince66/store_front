@@ -1,3 +1,4 @@
+import { cartLineDiscount } from "./utils/discountTiers";
 import { City, Country, State } from "country-state-city";
 import { useContext, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -706,7 +707,8 @@ export const useCheckoutHook = ({
         variationName: item.variation?.name,
         image: getPrimaryImage(item.product),
         quantity: item.quantity,
-        lineTotal: unitPrice * item.quantity,
+        // After any bulk discount, so the lines add up to the subtotal.
+        lineTotal: cartLineDiscount(item).subtotal || unitPrice * item.quantity,
       };
     });
 

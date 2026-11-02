@@ -1,3 +1,4 @@
+import type { DiscountThreshold } from "./utils/discountTiers";
 // ============================================
 // FILE: types/product.ts
 // ============================================
@@ -24,6 +25,8 @@ export interface StoreInfo {
   type: string;
   id: string;
   banner: string | null;
+  /** When true, out-of-stock items can still be ordered. */
+  allow_sales_without_stock?: boolean;
   /** Hero carousel images, in order. Falls back to `banner`, then `logo`. */
   banners?: string[];
   pay_transaction_charges: boolean;
@@ -66,6 +69,8 @@ export interface ProductVariation {
   sold: number;
   discount: number;
   discount_threshold: number | null;
+  /** Volume tiers; when set they replace discount/discount_threshold. */
+  discount_thresholds?: DiscountThreshold[] | null;
 }
 
 export interface ComboItem {
@@ -96,6 +101,8 @@ export interface Product {
   sold: number;
   discount: number | null;
   discount_threshold: number | null;
+  /** Volume tiers; when set they replace discount/discount_threshold. */
+  discount_thresholds?: DiscountThreshold[] | null;
   category: string;
   type: string;
   media?: ProductMedia[];

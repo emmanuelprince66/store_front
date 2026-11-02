@@ -393,8 +393,15 @@ export const Services = () => {
     setActiveTab("book");
     setStep(0);
 
+    // Keep whichever URL shape the customer arrived on: legacy /o|/i/<slug>,
+    // the shareable /<slug>/services link, or /services on a custom domain.
+    const legacyPrefix = location.pathname.startsWith("/o/")
+      ? "/o"
+      : location.pathname.startsWith("/i/")
+        ? "/i"
+        : "";
     const storePath = slug
-      ? `${location.pathname.startsWith("/o/") ? "/o" : "/i"}/${encodeURIComponent(slug)}/services`
+      ? `${legacyPrefix}/${encodeURIComponent(slug)}/services`
       : "/services";
     navigate(`${storePath}${location.search}`, { replace: true });
     window.scrollTo({ top: 0, behavior: "smooth" });

@@ -1,3 +1,5 @@
+import { cartLineDiscount } from "../utils/discountTiers";
+import { getAllowSalesWithoutStock, maxOrderQuantity } from "../utils/stock";
 import { createContext, useState } from "react";
 import type { CartItem, Product, ProductVariation } from "../type";
 
@@ -15,7 +17,10 @@ interface CartContextType {
     variationId?: string,
   ) => void;
   getTotalItems: () => number;
+  /** Cart total after volume (bulk) discounts. */
   getTotalPrice: () => number;
+  /** What the volume discounts take off. */
+  getTotalDiscount: () => number;
   clearCart: () => void;
 }
 
@@ -26,6 +31,7 @@ export const CartContext = createContext<CartContextType>({
   updateQuantity: () => {},
   getTotalItems: () => 0,
   getTotalPrice: () => 0,
+  getTotalDiscount: () => 0,
   clearCart: () => {},
 });
 
@@ -54,7 +60,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
       if (existingIndex !== -1) {
         // Update quantity of existing item
         const updated = [...prev];
-        const maxQuantity = variation?.quantity || product.quantity || 999;
+        const maxQuantity = maxOrderQuantity(
+          variation?.quantity ?? product.quantity,
+          getAllowSalesWithoutStock(),
+          999,
+        );
         updated[existingIndex].quantity = Math.min(
           updated[existingIndex].quantity + quantity,
           maxQuantity,
@@ -99,8 +109,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
           : item.product.id === productId && !item.variation;
 
         if (isMatch) {
-          const maxQuantity =
-            item.variation?.quantity || item.product.quantity || 999;
+          const maxQuantity = maxOrderQuantity(
+            item.variation?.quantity ?? item.product.quantity,
+            getAllowSalesWithoutStock(),
+            999,
+          );
           return { ...item, quantity: Math.min(quantity, maxQuantity) };
         }
         return item;
@@ -112,11 +125,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const getTotalPrice = () =>
-    cart.reduce((sum, item) => {
-      const price =
-        item.variation?.selling_price || item.product.selling_price || 0;
-      return sum + price * item.quantity;
-    }, 0);
+    cart.reduce((sum, item) => sum + cartLineDiscount(item).subtotal, 0);
+
+  const getTotalDiscount = () =>
+    cart.reduce((sum, item) => sum + cartLineDiscount(item).totalDiscount, 0);
 
   const clearCart = () => setCart([]);
 
@@ -129,6 +141,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         updateQuantity,
         getTotalItems,
         getTotalPrice,
+        getTotalDiscount,
         clearCart,
       }}
     >

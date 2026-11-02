@@ -1,3 +1,4 @@
+import { setAllowSalesWithoutStock } from "./utils/stock";
 import { useEffect, useState } from "react";
 import { BaseUrl } from "./base-url";
 import { getStoreDataPath } from "./utils/storefront";
@@ -192,6 +193,16 @@ const useFetchData = <T,>({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store_url, store_domain, autoFetch, category_id, search, page, limit]);
+
+  // Publish "sell without stock" for cards, product pages and the cart.
+  const storeInfo = (
+    state.data as { results?: { info?: { allow_sales_without_stock?: boolean } } } | null
+  )?.results?.info;
+  useEffect(() => {
+    if (storeInfo) {
+      setAllowSalesWithoutStock(storeInfo.allow_sales_without_stock === true);
+    }
+  }, [storeInfo]);
 
   return {
     ...state,

@@ -4,6 +4,8 @@
 // Shows the media gallery, full description, variations and add-to-cart.
 // ============================================
 
+import BulkPricingTable from "../components/BulkPricingTable";
+import { isStockOut, maxOrderQuantity, useAllowSalesWithoutStock } from "../utils/stock";
 import { useContext, useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Footer } from "../components/Footer";
@@ -57,6 +59,8 @@ export const ProductPage = ({ type }: ProductPageProps) => {
   const [selectedVariation, setSelectedVariation] =
     useState<ProductVariation | null>(null);
   const [quantity, setQuantity] = useState(1);
+  // Above the early returns below, like every hook.
+  const allowOversell = useAllowSalesWithoutStock();
 
   useEffect(() => {
     setSelectedVariation(product?.variations?.[0] || null);
@@ -128,13 +132,22 @@ export const ProductPage = ({ type }: ProductPageProps) => {
 
   const displayPrice =
     selectedVariation?.selling_price || product.selling_price || 0;
+  // Number(): the API can send stock as "10.00".
   const displayQuantity =
-    selectedVariation?.quantity || product.quantity || (isCombo ? 99 : 0);
+    Number(selectedVariation?.quantity || product.quantity) ||
+    (isCombo ? 99 : 0);
   const currentStatus = selectedVariation
     ? selectedVariation.status
     : product.status;
-  const isOutOfStock = currentStatus === "OUT-OF-STOCK";
-  const isLowStock = currentStatus === "LOW";
+  const stockOut = isStockOut(selectedVariation ?? product);
+  const onOrder = stockOut && allowOversell;
+  const isOutOfStock = stockOut && !allowOversell;
+  const isLowStock = !stockOut && currentStatus === "LOW";
+  const maxQuantity = maxOrderQuantity(
+    selectedVariation?.quantity ?? product.quantity,
+    allowOversell,
+    isCombo ? 99 : 0,
+  );
 
   const activeDiscount = hasVariations
     ? selectedVariation?.discount
@@ -231,6 +244,18 @@ export const ProductPage = ({ type }: ProductPageProps) => {
                 )}
               </div>
 
+              {/* Volume tiers for the product, or the chosen variation */}
+              {!isCombo && (selectedVariation || !hasVariations) && (
+                <BulkPricingTable
+                  tiers={
+                    (selectedVariation ?? product).discount_thresholds
+                  }
+                  price={displayPrice}
+                  quantity={quantity}
+                  currency={currency}
+                />
+              )}
+
               {/* Description */}
               {product.description && (
                 <div className="border-b border-gray-200 py-5">
@@ -265,14 +290,18 @@ export const ProductPage = ({ type }: ProductPageProps) => {
                   className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
                     isOutOfStock
                       ? "bg-[#FF3333]/10 text-[#FF3333]"
-                      : isLowStock
+                      : onOrder
+                        ? "bg-amber-50 text-amber-600"
+                        : isLowStock
                         ? "bg-amber-50 text-amber-600"
                         : "bg-green-50 text-green-700"
                   }`}
                 >
                   {isOutOfStock
                     ? "Out of stock"
-                    : isLowStock
+                    : onOrder
+                      ? "Available on order"
+                      : isLowStock
                       ? isCombo
                         ? "Low stock"
                         : `Only ${displayQuantity} left`
@@ -290,7 +319,8 @@ export const ProductPage = ({ type }: ProductPageProps) => {
                   </h3>
                   <div className="flex flex-wrap gap-2">
                     {product.variations!.map((variation) => {
-                      const varOut = variation.status === "OUT-OF-STOCK";
+                      const varOut =
+                        isStockOut(variation) && !allowOversell;
                       const isSelected = selectedVariation?.id === variation.id;
                       return (
                         <button
@@ -328,9 +358,9 @@ export const ProductPage = ({ type }: ProductPageProps) => {
                   </span>
                   <button
                     onClick={() =>
-                      setQuantity(Math.min(displayQuantity, quantity + 1))
+                      setQuantity(Math.min(maxQuantity, quantity + 1))
                     }
-                    disabled={isOutOfStock || quantity >= displayQuantity}
+                    disabled={isOutOfStock || quantity >= maxQuantity}
                     className="flex cursor-pointer h-10 w-10 items-center justify-center rounded-full text-lg font-bold transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     +
@@ -354,7 +384,9 @@ export const ProductPage = ({ type }: ProductPageProps) => {
                       ? "Select an Option"
                       : isInCart
                         ? `Add ${quantity} More to Cart`
-                        : "Add to Cart"}
+                        : onOrder
+                          ? "Order Now"
+                          : "Add to Cart"}
                 </button>
               </div>
 

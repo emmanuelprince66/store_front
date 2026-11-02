@@ -2,6 +2,7 @@
 // FILE: components/ProductBottomDrawer.tsx
 // ============================================
 
+import { isStockOut, maxOrderQuantity, useAllowSalesWithoutStock } from "../utils/stock";
 import { useContext, useState } from "react";
 import { CartContext } from "../context/CartContext";
 import type { Product, ProductVariation } from "../type";
@@ -36,9 +37,16 @@ const ProductBottomDrawer = ({
     selectedVariation?.selling_price || product.selling_price || 0;
   const displayQuantity =
     selectedVariation?.quantity || product.quantity || (isCombo ? 99 : 0);
-  const isInStock = selectedVariation
-    ? selectedVariation.status === "IN-STOCK"
-    : product.status === "IN-STOCK";
+  const allowOversell = useAllowSalesWithoutStock();
+  // Sellable unless empty and the business blocks selling without stock.
+  // (LOW still counts as available.)
+  const isInStock = allowOversell || !isStockOut(selectedVariation ?? product);
+  const onOrder = allowOversell && isStockOut(selectedVariation ?? product);
+  const maxQuantity = maxOrderQuantity(
+    selectedVariation?.quantity ?? product.quantity,
+    allowOversell,
+    isCombo ? 99 : 0,
+  );
 
   const handleAddToCart = () => {
     if (hasVariations && !selectedVariation) return;
@@ -106,7 +114,14 @@ const ProductBottomDrawer = ({
                   {displayPrice.toFixed(2)}
                 </p>
                 <div className="flex items-center">
-                  {isInStock ? (
+                  {onOrder ? (
+                    <>
+                      <div className="w-3 h-3 bg-amber-500 rounded-full mr-2"></div>
+                      <span className="text-amber-700 font-semibold">
+                        Available on Order
+                      </span>
+                    </>
+                  ) : isInStock ? (
                     <>
                       <div className="w-3 h-3 bg-black rounded-full mr-2"></div>
                       <span className="text-black font-semibold">
@@ -136,11 +151,11 @@ const ProductBottomDrawer = ({
                     <button
                       key={variation.id}
                       onClick={() => setSelectedVariation(variation)}
-                      disabled={variation.status !== "IN-STOCK"}
+                      disabled={isStockOut(variation) && !allowOversell}
                       className={`p-4 rounded-lg border-2 font-medium transition-all text-left ${
                         selectedVariation?.id === variation.id
                           ? "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-[var(--brand-on-primary)]"
-                          : variation.status === "IN-STOCK"
+                          : !isStockOut(variation) || allowOversell
                           ? "border-gray-300 bg-white text-gray-800 hover:border-gray-400"
                           : "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
                       }`}
@@ -151,9 +166,11 @@ const ProductBottomDrawer = ({
                         {variation.selling_price.toFixed(2)}
                       </div>
                       <div className="text-xs mt-1">
-                        {variation.status === "IN-STOCK"
+                        {!isStockOut(variation)
                           ? `${variation.quantity} available`
-                          : "Out of stock"}
+                          : allowOversell
+                            ? "Available on order"
+                            : "Out of stock"}
                       </div>
                     </button>
                   ))}
@@ -178,7 +195,7 @@ const ProductBottomDrawer = ({
                 </span>
                 <button
                   onClick={() =>
-                    setQuantity(Math.min(displayQuantity, quantity + 1))
+                    setQuantity(Math.min(maxQuantity, quantity + 1))
                   }
                   className="w-10 h-10 rounded-lg border-2 border-gray-300 hover:border-gray-400 flex items-center justify-center transition-colors text-xl font-bold"
                 >

@@ -1,3 +1,6 @@
+import { cartLineDiscount } from "../utils/discountTiers";
+import BulkDiscountNote from "./BulkDiscountNote";
+import { maxOrderQuantity, useAllowSalesWithoutStock } from "../utils/stock";
 import { useContext } from "react";
 import { CartContext } from "../context/CartContext";
 import { getPrimaryImage } from "../utils/media";
@@ -8,8 +11,16 @@ interface CartModalProps {
 }
 
 const CartModal = ({ onClose, onCheckout }: CartModalProps) => {
-  const { cart, removeFromCart, updateQuantity, getTotalPrice, getTotalItems } =
+  const {
+    cart,
+    removeFromCart,
+    updateQuantity,
+    getTotalPrice,
+    getTotalDiscount,
+    getTotalItems,
+  } =
     useContext(CartContext);
+  const allowOversell = useAllowSalesWithoutStock();
 
   const handleCheckout = () => {
     onClose();
@@ -50,8 +61,9 @@ const CartModal = ({ onClose, onCheckout }: CartModalProps) => {
     );
   }
 
-  const subtotal = getTotalPrice();
-  const total = subtotal;
+  const total = getTotalPrice();
+  const bulkDiscount = getTotalDiscount();
+  const subtotal = total + bulkDiscount;
 
   return (
     <div className="w-full flex flex-col h-full bg-white rounded-2xl overflow-hidden max-h-[90vh]">
@@ -73,11 +85,13 @@ const CartModal = ({ onClose, onCheckout }: CartModalProps) => {
           const itemPrice =
             item.variation?.selling_price || item.product.selling_price || 0;
           const isCombo = item.product.type === "COMBO";
-          const maxQuantity =
-            item.variation?.quantity ||
-            item.product.quantity ||
-            (isCombo ? 99 : 0);
+          const maxQuantity = maxOrderQuantity(
+            item.variation?.quantity ?? item.product.quantity,
+            allowOversell,
+            isCombo ? 99 : 0,
+          );
           const itemStatus = item.variation?.status || item.product.status;
+          const lineDiscount = cartLineDiscount(item);
 
           const cartItemKey = item.variation
             ? `${item.product.id}-${item.variation.id}`
@@ -158,9 +172,18 @@ const CartModal = ({ onClose, onCheckout }: CartModalProps) => {
                   </p>
                 )}
 
+                <BulkDiscountNote discount={lineDiscount} />
+
                 <div className="flex items-center justify-between mt-2">
-                  <span className="font-bold text-[var(--brand-primary)] text-base sm:text-lg">
-                    ₦{(itemPrice * item.quantity).toFixed(2)}
+                  <span className="flex flex-col">
+                    {lineDiscount.totalDiscount > 0 && (
+                      <span className="text-xs text-gray-400 line-through">
+                        ₦{(itemPrice * item.quantity).toFixed(2)}
+                      </span>
+                    )}
+                    <span className="font-bold text-[var(--brand-primary)] text-base sm:text-lg">
+                      ₦{lineDiscount.subtotal.toFixed(2)}
+                    </span>
                   </span>
 
                   <div className="flex items-center bg-[#f0f0f0] rounded-full">
@@ -213,6 +236,14 @@ const CartModal = ({ onClose, onCheckout }: CartModalProps) => {
               ₦{subtotal.toFixed(2)}
             </span>
           </div>
+          {bulkDiscount > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500">Bulk discount</span>
+              <span className="font-semibold text-green-600">
+                −₦{bulkDiscount.toFixed(2)}
+              </span>
+            </div>
+          )}
           <div className="flex items-center justify-between pt-2 border-t border-gray-100">
             <span className="font-bold text-black">Total</span>
             <span className="font-bold text-[var(--brand-primary)] text-lg sm:text-xl">
