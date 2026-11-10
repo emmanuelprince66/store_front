@@ -44,9 +44,27 @@ export interface ServicesListResponse {
 }
 
 export interface StaffOption {
+  /** `null` is the backend's "any staff" entry. */
   id: string | null;
   name: string;
+  /** Not in the documented contract; rendered only if the backend sends them. */
+  role?: string | null;
+  image?: string | null;
 }
+
+/** Real attendants from `staff_options`, without the null "any" entry or duplicates. */
+export const getSelectableStaff = (
+  options: StaffOption[] | null | undefined,
+): Array<StaffOption & { id: string }> => {
+  const seen = new Set<string>();
+  const result: Array<StaffOption & { id: string }> = [];
+  for (const option of options ?? []) {
+    if (!option?.id || seen.has(option.id)) continue;
+    seen.add(option.id);
+    result.push(option as StaffOption & { id: string });
+  }
+  return result;
+};
 
 export interface AvailableSlot {
   start_time: string;

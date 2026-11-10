@@ -13,6 +13,13 @@ import { ApiError, apiRequest } from "./client";
 
 export type PaymentMethod = "BANK-TRANSFER" | "CARD" | "BNPL" | "COD";
 
+/**
+ * The checkout endpoints' enum is BANK | CARD | BNPL | COD. The UI and fee table
+ * call bank transfer "BANK-TRANSFER", so translate it on the way out.
+ */
+const toApiPaymentMethod = (method: PaymentMethod) =>
+  method === "BANK-TRANSFER" ? "BANK" : method;
+
 /** In-store uses its own vocabulary: payment_type, not payment_method. */
 export type InStorePaymentType = "COUNTER" | "ONLINE" | "BNPL";
 
@@ -111,7 +118,7 @@ export const checkoutOutstoreLegacy = (
 ) =>
   apiRequest<CheckoutResponse>(
     `/order/business/${businessId}/outstore-checkout/`,
-    { method: "POST", body: payload, errorMessage: "Failed to place order" },
+    { method: "POST", body: { ...payload, payment_method: toApiPaymentMethod(payload.payment_method) }, errorMessage: "Failed to place order" },
   );
 
 export const checkoutOutstoreShipbubble = (
@@ -120,7 +127,7 @@ export const checkoutOutstoreShipbubble = (
 ) =>
   apiRequest<CheckoutResponse>(
     `/order/outstore-checkout/${encodeURIComponent(reference)}/`,
-    { method: "POST", body: payload, errorMessage: "Failed to place order" },
+    { method: "POST", body: { ...payload, payment_method: toApiPaymentMethod(payload.payment_method) }, errorMessage: "Failed to place order" },
   );
 
 // ---- In-store draft ---------------------------------------------------

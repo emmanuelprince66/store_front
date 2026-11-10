@@ -283,7 +283,7 @@ export const ProductPage = ({ type }: ProductPageProps) => {
                       ? isCombo
                         ? "Low stock"
                         : `Only ${displayQuantity} left`
-                      : isCombo
+                      : isCombo || product.is_virtual
                         ? "In stock"
                         : `${displayQuantity} in stock`}
                 </span>

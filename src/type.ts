@@ -98,6 +98,9 @@ export interface Product {
   // `quantity` is absent on them; stock is only meaningful via `status`,
   // which the backend derives from `items[].stock`.
   quantity?: number;
+  // Virtual products have no stock: the API sends quantity 999999 and IN-STOCK,
+  // so the count must never be shown to the customer.
+  is_virtual?: boolean;
   sold: number;
   discount: number | null;
   discount_threshold: number | null;

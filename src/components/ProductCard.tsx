@@ -210,7 +210,7 @@ export const ProductCard = ({
                   ? isCombo || hasVariations
                     ? "Low stock"
                     : `Only ${formatQuantity(product.quantity)} left`
-                  : isCombo || hasVariations
+                  : isCombo || hasVariations || product.is_virtual
                     ? "In stock"
                     : `${formatQuantity(product.quantity)} in stock`}
             </span>

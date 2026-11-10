@@ -127,7 +127,7 @@ const ProductBottomDrawer = ({
                     <>
                       <div className="w-3 h-3 bg-black rounded-full mr-2"></div>
                       <span className="text-black font-semibold">
-                        {isCombo ? "In Stock" : `In Stock (${displayQuantity})`}
+                        {isCombo || product.is_virtual ? "In Stock" : `In Stock (${displayQuantity})`}
                       </span>
                     </>
                   ) : (

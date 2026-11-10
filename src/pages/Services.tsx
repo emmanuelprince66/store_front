@@ -19,6 +19,7 @@ import {
   createBookingHold,
   fetchServiceDetail,
   fetchStoreServices,
+  getSelectableStaff,
   pollBookingPaymentVerification,
   resolveServicePolicy,
   verifyBookingPayment,
@@ -37,6 +38,7 @@ import {
 } from "../components/services/BookingPolicy";
 import { CardPaymentForm } from "../components/services/CardPaymentForm";
 import { ServiceSelfServicePortal } from "../components/services/ServiceSelfServicePortal";
+import { ANY_STAFF_LABEL, StaffPicker } from "../components/services/StaffPicker";
 import { ThreeDsRedirectModal } from "../components/services/ThreeDsRedirectModal";
 import { PaymentPinField } from "../components/PaymentPinField";
 import { WhatsAppButton } from "../components/WhatsAppButton";
@@ -141,6 +143,12 @@ export const Services = () => {
   const [slotsRefreshKey, setSlotsRefreshKey] = useState(0);
   const [selectedDate, setSelectedDate] = useState(localDateKey(new Date()));
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
+  // Attendant choice; null = any available attendant. The list is kept from
+  // the unfiltered fetch so it doesn't shrink once one attendant is chosen.
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+  const [staffOptions, setStaffOptions] = useState<
+    ReturnType<typeof getSelectableStaff>
+  >([]);
 
   // Customer Details
   const [customer, setCustomer] = useState({
@@ -250,11 +258,18 @@ export const Services = () => {
         const detail = await fetchServiceDetail(
           target,
           selectedService.id,
-          { date: selectedDate },
+          { date: selectedDate, staff_id: selectedStaffId },
           controller.signal,
         );
         setServiceDetail(detail);
         setSelectedSlot(null);
+
+        const nextStaff = getSelectableStaff(detail.staff_options);
+        if (!selectedStaffId) {
+          setStaffOptions(nextStaff);
+        } else {
+          setStaffOptions((current) => (current.length ? current : nextStaff));
+        }
 
         if (detail.payment_options) {
           const options = detail.payment_options;
@@ -295,7 +310,7 @@ export const Services = () => {
 
     loadSlotDetails();
     return () => controller.abort();
-  }, [target, selectedService, selectedDate, slotsRefreshKey]);
+  }, [target, selectedService, selectedDate, selectedStaffId, slotsRefreshKey]);
 
   const selectedCategoryName = serviceCategories.find(
     (c) => c.id === selectedCategory,
@@ -324,6 +339,10 @@ export const Services = () => {
   };
 
   const startBooking = (service: StoreServiceItem) => {
+    if (service.id !== selectedService?.id) {
+      setStaffOptions([]);
+      setSelectedStaffId(null);
+    }
     setSelectedService(service);
     setPolicyAccepted(false);
     setSelectedSlot(null);
@@ -376,6 +395,8 @@ export const Services = () => {
     setSelectedService(null);
     setServiceDetail(null);
     setSelectedSlot(null);
+    setSelectedStaffId(null);
+    setStaffOptions([]);
     setSelectedDate(localDateKey(new Date()));
     setCustomer({ name: "", phone: "", email: "", notes: "" });
     setPaymentOption("FULL_PAYMENT");
@@ -537,6 +558,21 @@ export const Services = () => {
     return `You can cancel until ${formatted}.`;
   }, [servicePolicy, selectedSlot, selectedDate]);
 
+  const selectedStaff = selectedStaffId
+    ? staffOptions.find((staff) => staff.id === selectedStaffId) ?? null
+    : null;
+  const attendantLabel = selectedStaff?.name ?? ANY_STAFF_LABEL;
+
+  // The backend filters slots by staff_id; this also drops any slot whose
+  // available_staff explicitly excludes the chosen attendant.
+  const visibleSlots = (serviceDetail?.available_slots ?? []).filter((slot) => {
+    if (!selectedStaffId) return true;
+    const staffIds = (slot.available_staff ?? [])
+      .map((staff) => staff?.id)
+      .filter((id): id is string => Boolean(id));
+    return staffIds.length === 0 || staffIds.includes(selectedStaffId);
+  });
+
   // Form validations
   const canContinueToCustomer = Boolean(selectedSlot && selectedDate);
   const canContinueToPayment = Boolean(
@@ -659,6 +695,7 @@ export const Services = () => {
       customer_email: customer.email.trim() || undefined,
       booking_date: selectedDate,
       start_time: selectedSlot.start_time,
+      staff_id: selectedStaffId ?? undefined,
       payment_option: paymentOption,
       deposit_amount:
         paymentOption === "DEPOSIT"
@@ -1119,6 +1156,18 @@ export const Services = () => {
                 {/* Step 1: Date & Dynamic Slots Picker */}
                 {step === 1 && selectedService && (
                   <div className="space-y-6">
+                    {staffOptions.length > 0 && (
+                      <StaffPicker
+                        staff={staffOptions}
+                        selectedStaffId={selectedStaffId}
+                        onSelect={(staffId) => {
+                          if (staffId === selectedStaffId) return;
+                          setSelectedSlot(null);
+                          setSelectedStaffId(staffId);
+                        }}
+                      />
+                    )}
+
                     {/* Date Picker */}
                     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
                       <div className="flex items-center justify-between">
@@ -1192,14 +1241,29 @@ export const Services = () => {
                             Try Again
                           </button>
                         </div>
-                      ) : !serviceDetail?.available_slots ||
-                        serviceDetail.available_slots.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-xs text-gray-500">
-                          No available slots for this date. Please select a different date.
+                      ) : visibleSlots.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-xs text-gray-500 space-y-3">
+                          <p>
+                            {selectedStaff
+                              ? `${selectedStaff.name} has no available slots for this date. Pick another date or attendant.`
+                              : "No available slots for this date. Please select a different date."}
+                          </p>
+                          {selectedStaff && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedSlot(null);
+                                setSelectedStaffId(null);
+                              }}
+                              className="min-h-10 rounded-full border border-[var(--brand-primary)] px-4 py-2 font-semibold text-[var(--brand-primary)] hover:bg-white transition"
+                            >
+                              Try any available attendant
+                            </button>
+                          )}
                         </div>
                       ) : (
                         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-                          {serviceDetail.available_slots.map((slot) => {
+                          {visibleSlots.map((slot) => {
                             const isSelected = selectedSlot?.start_time === slot.start_time;
                             const isFull = slot.remaining_capacity === 0;
 
@@ -1681,6 +1745,14 @@ export const Services = () => {
                           {bookingHold.start_time} – {bookingHold.end_time}
                         </span>
                       </div>
+                      {(bookingHold.staff_name || staffOptions.length > 0) && (
+                        <div className="flex justify-between gap-3">
+                          <span className="text-gray-500">Attendant</span>
+                          <span className="text-right font-semibold text-gray-900">
+                            {bookingHold.staff_name || attendantLabel}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex justify-between border-t border-gray-200 pt-2 font-bold">
                         <span className="text-gray-700">Balance Due at Venue</span>
                         <span className="text-[var(--brand-primary)]">
@@ -1744,6 +1816,14 @@ export const Services = () => {
                             <span>Time:</span>
                             <span className="font-semibold text-gray-900">
                               {selectedSlot.display || selectedSlot.start_time}
+                            </span>
+                          </div>
+                        )}
+                        {staffOptions.length > 0 && (
+                          <div className="flex justify-between gap-3 text-gray-600">
+                            <span>Attendant:</span>
+                            <span className="truncate text-right font-semibold text-gray-900">
+                              {attendantLabel}
                             </span>
                           </div>
                         )}
