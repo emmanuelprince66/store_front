@@ -9,6 +9,7 @@ import {
 import { ToastContainer } from "react-toastify";
 import Success from "./components/Success";
 import { CartProvider } from "./context/CartContext";
+import CartLinkCheckout from "./pages/CartLinkCheckout";
 import InStore from "./pages/InStore";
 import { OutStore } from "./pages/Outstore";
 import ProductPage from "./pages/ProductPage";
@@ -29,6 +30,9 @@ function App() {
           <Route path="/" element={<DefaultToOutStore />} />
           <Route path="/in" element={<InStore />} />
           <Route path="/out" element={<OutStore />} />
+          {/* Cart deep links (?items=<productId>:<qty>,…) sent by merchants. */}
+          <Route path="/out/checkout" element={<CartLinkCheckout />} />
+          <Route path="/o/:slug/checkout" element={<CartLinkCheckout />} />
           <Route
             path="/in/product/:productId"
             element={<ProductPage type="in-store" />}

@@ -1,4 +1,4 @@
-import type { StoreServiceItem } from "../api/services";
+import { getServiceImage, type StoreServiceItem } from "../api/services";
 import { ProductImageWithPlaceholder } from "./ImagePlaceHolder";
 
 interface ServiceCardProps {
@@ -24,6 +24,9 @@ export const ServiceCard = ({ service, currency, onBook }: ServiceCardProps) => 
       service.payment_requirement === "ANY") &&
     Number.isFinite(minDeposit);
 
+  const image = getServiceImage(service);
+  const photoCount = (service.media ?? []).filter((item) => item.file).length;
+
   return (
     <div
       onClick={() => onBook(service)}
@@ -32,9 +35,9 @@ export const ServiceCard = ({ service, currency, onBook }: ServiceCardProps) => 
       {/* Media Container matching ProductCard */}
       <div className="relative w-full aspect-square overflow-hidden rounded-2xl bg-[#f0f0f0]">
         <div className="absolute inset-0 p-4 sm:p-6 transition-transform duration-500 group-hover:scale-105">
-          {service.image ? (
+          {image ? (
             <ProductImageWithPlaceholder
-              product={{ image: service.image, name: service.name }}
+              product={{ image, name: service.name }}
               className="w-full h-full"
               objectFit="contain"
             />
@@ -64,6 +67,11 @@ export const ServiceCard = ({ service, currency, onBook }: ServiceCardProps) => 
 
         {/* Top-right badges: Deposit info */}
         <div className="absolute top-2 right-2 z-10 flex flex-col items-end gap-1.5 pointer-events-none">
+          {photoCount > 1 && (
+            <span className="bg-black/60 text-white text-[10px] font-semibold px-2.5 py-1 rounded-full backdrop-blur-sm">
+              {photoCount} photos
+            </span>
+          )}
           {showDepositBadge && (
             <span className="bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] text-[10px] font-semibold px-2.5 py-1 rounded-full backdrop-blur-sm">
               Deposit from {formatAmount(minDeposit)}
@@ -71,19 +79,6 @@ export const ServiceCard = ({ service, currency, onBook }: ServiceCardProps) => 
           )}
         </div>
 
-        {/* Quick action button — slides up on hover */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onBook(service);
-          }}
-          // Visible on hover, on keyboard focus, and always on touch screens
-          // (which can't hover) so it's never an invisible tab stop.
-          className="absolute bottom-3 left-3 right-3 py-2.5 rounded-full text-xs font-semibold transition-all duration-300 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 translate-y-2 group-hover:translate-y-0 focus-visible:translate-y-0 [@media(hover:none)]:translate-y-0 bg-[var(--brand-primary)] text-[var(--brand-on-primary)] hover:opacity-90 shadow-md text-center cursor-pointer"
-        >
-          Book Appointment
-        </button>
       </div>
 
       {/* Info section matching ProductCard */}
@@ -114,7 +109,7 @@ export const ServiceCard = ({ service, currency, onBook }: ServiceCardProps) => 
               e.stopPropagation();
               onBook(service);
             }}
-            className="sm:hidden min-h-9 text-xs font-semibold px-4 py-2 rounded-full bg-[var(--brand-primary)] text-[var(--brand-on-primary)] cursor-pointer"
+            className="min-h-9 text-xs font-semibold px-4 py-2 rounded-full bg-[var(--brand-primary)] text-[var(--brand-on-primary)] cursor-pointer"
           >
             Book
           </button>

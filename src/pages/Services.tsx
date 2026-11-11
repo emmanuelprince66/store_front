@@ -38,6 +38,7 @@ import {
 } from "../components/services/BookingPolicy";
 import { CardPaymentForm } from "../components/services/CardPaymentForm";
 import { ServiceSelfServicePortal } from "../components/services/ServiceSelfServicePortal";
+import { ServiceSummaryCard } from "../components/services/ServiceSummaryCard";
 import { ANY_STAFF_LABEL, StaffPicker } from "../components/services/StaffPicker";
 import { ThreeDsRedirectModal } from "../components/services/ThreeDsRedirectModal";
 import { PaymentPinField } from "../components/PaymentPinField";
@@ -1104,8 +1105,8 @@ export const Services = () => {
         /* Booking Steps 1 to 5 */
         <main className="flex-1 bg-[var(--brand-surface)] py-8 sm:py-12">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
-              <section className="space-y-6">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+              <section className="min-w-0 space-y-6">
                 {/* Header with Back button */}
                 <div className="flex items-center justify-between border-b border-gray-200 pb-4">
                   <div className="flex items-center gap-3">
@@ -1154,6 +1155,14 @@ export const Services = () => {
                 </div>
 
                 {/* Step 1: Date & Dynamic Slots Picker */}
+                {step < 5 && selectedService && (
+                  <ServiceSummaryCard
+                    service={selectedService}
+                    price={formatCurrency(selectedService.amount, currencySymbol)}
+                    showGallery={step === 1}
+                  />
+                )}
+
                 {step === 1 && selectedService && (
                   <div className="space-y-6">
                     {staffOptions.length > 0 && (
@@ -1787,7 +1796,7 @@ export const Services = () => {
 
               {/* Sidebar Booking Summary */}
               {selectedService && step < 5 && (
-                <aside className="space-y-4">
+                <aside className="min-w-0 space-y-4">
                   <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">
                       Summary

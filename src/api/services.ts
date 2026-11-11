@@ -23,6 +23,8 @@ export interface StoreServiceItem {
   duration: number;
   duration_display?: string;
   image?: string | null;
+  /** Gallery (up to 5); `image` is the older single picture. */
+  media?: { id: string; file: string; type?: string }[];
   category?: string | null;
   payment_requirement?: PaymentRequirement;
   min_deposit_percentage?: number | null;
@@ -556,7 +558,8 @@ export const cancelBooking = async (
 export const rescheduleBooking = async (
   target: StoreTarget,
   reference: string,
-  payload: { new_date: string; new_start_time: string },
+  /** `staff_id` moves the booking to another attendant; leave it out to keep the current one. */
+  payload: { new_date: string; new_start_time: string; staff_id?: string },
   signal?: AbortSignal,
 ): Promise<RescheduleBookingResponse> => {
   const base = getServiceBasePath(target);
@@ -604,3 +607,7 @@ export const calculateServiceCharges = (
     totalPayable: amount + charges,
   };
 };
+
+/** First gallery picture, falling back to the single `image`. */
+export const getServiceImage = (service: Pick<StoreServiceItem, "image" | "media">) =>
+  service.media?.find((item) => item.file && (!item.type || item.type.toUpperCase() === "IMAGE"))?.file || service.image || null;

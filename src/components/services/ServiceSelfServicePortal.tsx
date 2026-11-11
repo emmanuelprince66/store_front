@@ -3,15 +3,18 @@ import { toast } from "react-toastify";
 import type {
   AvailableSlot,
   CustomerBookingLookupResponse,
+  StaffOption,
   StoreTarget,
 } from "../../api/services";
 import {
   cancelBooking,
   fetchServiceDetail,
+  getSelectableStaff,
   lookupBookingByReference,
   rescheduleBooking,
 } from "../../api/services";
 import { getErrorMessage, isAbortError } from "../../api/client";
+import { StaffPicker } from "./StaffPicker";
 
 // Today in the customer's timezone (toISOString() is UTC and allows yesterday
 // shortly after midnight in Lagos).
@@ -56,6 +59,9 @@ export const ServiceSelfServicePortal = ({
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [availableSlots, setAvailableSlots] = useState<AvailableSlot[]>([]);
   const [isRescheduling, setIsRescheduling] = useState(false);
+  // null keeps the current attendant; an id moves the booking to that attendant.
+  const [newStaffId, setNewStaffId] = useState<string | null>(null);
+  const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
 
   const performLookup = async (ref: string) => {
     const cleanRef = ref.trim().toUpperCase();
@@ -113,7 +119,9 @@ export const ServiceSelfServicePortal = ({
     setShowRescheduleModal(true);
     setNewDate(booking.booking_date);
     setNewSlot(null);
-    loadRescheduleSlots(booking.service.id, booking.booking_date);
+    setNewStaffId(null);
+    setStaffOptions([]);
+    loadRescheduleSlots(booking.service.id, booking.booking_date, null);
   };
 
   // Only the latest request may update the slots, so changing the date quickly
@@ -121,7 +129,7 @@ export const ServiceSelfServicePortal = ({
   const slotsRequestRef = useRef<AbortController | null>(null);
   useEffect(() => () => slotsRequestRef.current?.abort(), []);
 
-  const loadRescheduleSlots = async (serviceId: string, date: string) => {
+  const loadRescheduleSlots = async (serviceId: string, date: string, staffId: string | null) => {
     slotsRequestRef.current?.abort();
     const controller = new AbortController();
     slotsRequestRef.current = controller;
@@ -131,10 +139,12 @@ export const ServiceSelfServicePortal = ({
       const detail = await fetchServiceDetail(
         target,
         serviceId,
-        { date },
+        { date, staff_id: staffId },
         controller.signal,
       );
       setAvailableSlots(detail.available_slots || []);
+      // The attendant list comes back in full whichever attendant is chosen.
+      setStaffOptions(getSelectableStaff(detail.staff_options));
     } catch (err: unknown) {
       if (isAbortError(err)) return;
       toast.error(
@@ -150,7 +160,16 @@ export const ServiceSelfServicePortal = ({
     setNewDate(date);
     setNewSlot(null);
     if (booking?.service.id) {
-      loadRescheduleSlots(booking.service.id, date);
+      loadRescheduleSlots(booking.service.id, date, newStaffId);
+    }
+  };
+
+  const handleStaffChange = (staffId: string | null) => {
+    if (staffId === newStaffId) return;
+    setNewStaffId(staffId);
+    setNewSlot(null);
+    if (booking?.service.id && newDate) {
+      loadRescheduleSlots(booking.service.id, newDate, staffId);
     }
   };
 
@@ -165,6 +184,7 @@ export const ServiceSelfServicePortal = ({
       await rescheduleBooking(target, booking.reference, {
         new_date: newDate,
         new_start_time: newSlot,
+        ...(newStaffId ? { staff_id: newStaffId } : {}),
       });
       toast.success("Booking rescheduled successfully!");
       setShowRescheduleModal(false);
@@ -476,6 +496,17 @@ export const ServiceSelfServicePortal = ({
                 ✕
               </button>
             </div>
+
+            {staffOptions.length > 0 && (
+              <StaffPicker
+                staff={staffOptions}
+                selectedStaffId={newStaffId}
+                onSelect={handleStaffChange}
+                disabled={isRescheduling}
+                anyLabel="Keep current"
+                anyHint={booking?.staff || "Same attendant"}
+              />
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">

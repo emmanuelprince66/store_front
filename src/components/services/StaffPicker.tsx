@@ -15,6 +15,9 @@ interface StaffPickerProps {
   selectedStaffId: string | null;
   onSelect: (staffId: string | null) => void;
   disabled?: boolean;
+  /** Label and hint for the `null` option. */
+  anyLabel?: string;
+  anyHint?: string;
 }
 
 /** Attendant choice for a service booking; `null` means any available attendant. */
@@ -23,9 +26,11 @@ export const StaffPicker = ({
   selectedStaffId,
   onSelect,
   disabled = false,
+  anyLabel = "Any available",
+  anyHint = "First free attendant",
 }: StaffPickerProps) => {
   const options: Array<{ id: string | null; name: string; role?: string | null; image?: string | null }> = [
-    { id: null, name: ANY_STAFF_LABEL, role: "First free attendant" },
+    { id: null, name: ANY_STAFF_LABEL, role: anyHint },
     ...staff,
   ];
 
@@ -86,7 +91,7 @@ export const StaffPicker = ({
                     isSelected ? "text-[var(--brand-primary)]" : "text-gray-900"
                   }`}
                 >
-                  {isAny ? "Any available" : option.name}
+                  {isAny ? anyLabel : option.name}
                 </span>
                 {option.role && (
                   <span className="block truncate text-[10px] text-gray-500">
